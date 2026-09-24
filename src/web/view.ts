@@ -69,6 +69,22 @@ export const eligibilityText = (o: OfferingDto) =>
 
 export const fullName = (p: PersonDto) => [p.firstName, p.lastName].filter(Boolean).join(' ')
 
+const shortPl = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'numeric' })
+
+/** Header text for a bracket's registration wave: countdown, open (until…), or closed. */
+export function waveStatus(opens: string | undefined, closes: string | undefined, bracket: string): string | null {
+  const toOpen = daysUntil(opens)
+  if (toOpen == null) return null
+  if (toOpen > 0) return `${toOpen} dni do zapisów ${bracket}`
+  const toClose = daysUntil(closes)
+  if (toClose != null && toClose < 0) return `zapisy ${bracket} zakończone`
+  const until = closes ? ` · do ${shortPl(closes)}` : ''
+  return toOpen === 0 ? `zapisy ${bracket} od dziś${until}` : `zapisy ${bracket} trwają${until}`
+}
+
+export const waveRange = (opens: string | undefined, closes: string | undefined) =>
+  opens ? `${shortPl(opens)}${closes ? ` – ${shortPl(closes)}` : ''}` : '—'
+
 export function daysUntil(isoDate: string | undefined): number | null {
   if (!isoDate) return null
   const start = new Date(new Date().toDateString())

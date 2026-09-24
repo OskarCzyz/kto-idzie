@@ -70,7 +70,7 @@ Kilka osób wpisujesz po przecinku: `"123,456"`. Kolejnych organizatorów możes
 npm run db:migrate:remote
 ```
 
-Potwierdź `y`. Powinny pojawić się `0001_init.sql ✅` i `0002_version.sql ✅`.
+Potwierdź `y`. Przy każdej migracji z folderu `migrations/` powinien pojawić się ✅.
 
 ## 8. Wdróż aplikację
 
@@ -104,7 +104,7 @@ Link do aplikacji to: **`https://t.me/<username_bota>?startapp`**, np. `https://
 
 1. Otwórz link z kroku 10 na telefonie. Wybierz płeć i grupę wiekową.
 2. Kliknij ⚙️ (panel organizatora):
-   - **Obóz:** nazwa `Nyttårs camp 2026`, liczba dni i daty (28.12–1.01), daty startu zapisów dla U15/U18/O18. Kliknij Zapisz.
+   - **Obóz:** nazwa `Nyttårs camp 2026`, liczba dni i daty (28.12–1.01), daty startu (i opcjonalnie końca) zapisów dla U15/U18/O18. Kliknij Zapisz.
    - **Aktywności:** dodaj każdą z nazwą i krótkim opisem. Potem otwórz ją ponownie i dodaj zdjęcia.
    - **Oferty:** dla każdej aktywności wskaż, w które dni jest dostępna, dla kogo (chłopcy/dziewczyny, U15/U18/O18), limit miejsc i 🔥, jeśli jest na nią duże zainteresowanie. Kilka dni w jednej ofercie oznacza aktywność wielodniową.
 3. Sprawdź dzień lub dwa jako uczestnik: dodaj coś do rankingu, przeciągnij, ustaw warunek.
@@ -129,6 +129,7 @@ Link do aplikacji to: **`https://t.me/<username_bota>?startapp`**, np. `https://
 ## Gdy coś nie działa
 
 - **W Telegramie widać „Nie udało się połączyć … 401”:** zły `BOT_TOKEN`. Powtórz krok 9 z tokenem od BotFathera (`/mybots` → bot → API Token).
+- **Każdy dostaje „Nie udało się połączyć”:** sprawdź `npx wrangler secret list`. Musi tam być `BOT_TOKEN`. Token idzie **tylko** przez `secret put`, nigdy do `wrangler.jsonc`.
 - **Nie widzisz ⚙️:** Twoje ID w `ORGANIZER_TELEGRAM_IDS` jest złe. Popraw je i zrób `npm run deploy`.
 - **„Organizator jeszcze nie przygotował obozu”:** nie zapisałeś zakładki Obóz w panelu.
 - **Błąd przy `deploy` o `database_id`:** nie podmieniłeś UUID w kroku 3.

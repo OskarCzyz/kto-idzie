@@ -83,7 +83,7 @@ The actual first-come-first-served sign-up for an offering, done in a separate a
 _Avoid_: Enrollment, booking
 
 **Registration wave**:
-The moment an age bracket may start external registration, in the order U15 → U18 → O18, about a week or more apart. The organizer enters the dates. Earlier waves get first access to capacity.
+The moment an age bracket may start external registration, in the order U15 → U18 → O18, about a week or more apart. The organizer enters the dates, optionally with the date it closes (for information only). Earlier waves get first access to capacity.
 _Avoid_: Deadline, window
 
 **Planning period**:

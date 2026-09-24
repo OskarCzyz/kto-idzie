@@ -9,12 +9,14 @@ export async function activeCamp(db: D1Database): Promise<Camp | null> {
   if (!camp) return null
   const [days, waves] = await db.batch([
     db.prepare('SELECT id, day_no, date FROM camp_day WHERE camp_id = ?1 ORDER BY day_no').bind(camp.id),
-    db.prepare('SELECT bracket, opens_at FROM wave WHERE camp_id = ?1').bind(camp.id),
+    db.prepare('SELECT bracket, opens_at, closes_at FROM wave WHERE camp_id = ?1').bind(camp.id),
   ])
+  const waveRows = waves!.results as { bracket: Bracket; opens_at: string; closes_at: string | null }[]
   return {
     ...camp,
     days: (days!.results as { id: number; day_no: number; date: string | null }[]).map((d) => ({ id: d.id, dayNo: d.day_no, date: d.date })),
-    waves: Object.fromEntries((waves!.results as { bracket: Bracket; opens_at: string }[]).map((w) => [w.bracket, w.opens_at])),
+    waves: Object.fromEntries(waveRows.map((w) => [w.bracket, w.opens_at])),
+    waveEnds: Object.fromEntries(waveRows.filter((w) => w.closes_at).map((w) => [w.bracket, w.closes_at])),
   }
 }
 

@@ -35,7 +35,7 @@ admin.put('/camp', async (c) => {
     ),
     db.prepare('DELETE FROM wave WHERE camp_id = ?1').bind(campId),
     ...BRACKETS.filter((b) => body.waves[b]).map((b) =>
-      db.prepare('INSERT INTO wave (camp_id, bracket, opens_at) VALUES (?1, ?2, ?3)').bind(campId, b, body.waves[b]),
+      db.prepare('INSERT INTO wave (camp_id, bracket, opens_at, closes_at) VALUES (?1, ?2, ?3, ?4)').bind(campId, b, body.waves[b], body.waveEnds?.[b] || null),
     ),
   ])
   camp = await activeCamp(db)

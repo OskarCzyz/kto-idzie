@@ -9,7 +9,7 @@ import { ConditionSheet, OfferingSheet, PersonSheet } from './sheets'
 import { Summary } from './Summary'
 import { confirmAsync } from './telegram'
 import { useCampState } from './useCampState'
-import { STATUS_ICON, daysUntil, makeView } from './view'
+import { STATUS_ICON, makeView, waveStatus } from './view'
 
 type Tab = 'days' | 'plan' | 'people'
 type SheetState = { type: 'offering'; oid: number } | { type: 'person'; pid: number } | { type: 'condition'; oid: number } | null
@@ -37,7 +37,7 @@ export function Planner({ me, onAdmin }: { me: Me; onAdmin?: () => void }) {
 
   const days = view.state.camp.days
   const day = days[Math.min(dayIndex, days.length - 1)]!
-  const toWave = daysUntil(view.state.camp.waves[view.me.bracket])
+  const wave = waveStatus(view.state.camp.waves[view.me.bracket], view.state.camp.waveEnds[view.me.bracket], view.me.bracket)
 
   /** Applies a change to my plan; asks first if it would undo a Registered day. */
   async function edit(change: (plan: Plan) => Plan) {
@@ -61,7 +61,7 @@ export function Planner({ me, onAdmin }: { me: Me; onAdmin?: () => void }) {
   return (
     <div className="page with-nav">
       <Hero>
-        {toWave != null && <span className="wave">⏰ {toWave > 0 ? `${toWave} dni do zapisów ${view.me.bracket}` : toWave === 0 ? 'zapisy dziś!' : 'zapisy trwają'}</span>}
+        {wave && <span className="wave">⏰ {wave}</span>}
         {onAdmin && <button className="chip" onClick={onAdmin} aria-label="Panel organizatora">⚙️</button>}
       </Hero>
 

@@ -1,5 +1,6 @@
 import { Thumb } from './ui'
-import { STATUS_ICON, STATUS_LABEL, type View } from './view'
+import type { Bracket } from '../domain'
+import { STATUS_ICON, STATUS_LABEL, waveRange, type View } from './view'
 
 export function Summary({ view, goToDay }: { view: View; goToDay: (index: number) => void }) {
   const me = view.me.id
@@ -7,6 +8,16 @@ export function Summary({ view, goToDay }: { view: View; goToDay: (index: number
   return (
     <>
       <h2 className="q" style={{ paddingTop: 14 }}>Twój plan</h2>
+      <div className="card pad">
+        <div className="small muted" style={{ marginBottom: 6 }}>Zapisy w aplikacji wydarzenia</div>
+        {(['U15', 'U18', 'O18'] as Bracket[]).map((b) => (
+          <div key={b} className="row small" style={{ padding: '3px 0', fontWeight: b === view.me.bracket ? 700 : 400 }}>
+            <span style={{ width: 40 }}>{b}</span>
+            <span>{waveRange(view.state.camp.waves[b], view.state.camp.waveEnds[b])}</span>
+            {b === view.me.bracket && <span className="muted">· Twoja grupa</span>}
+          </div>
+        ))}
+      </div>
       {conflicts.length > 0 && (
         <div className="warn">⚠️ Masz konflikt: {conflicts.map((oid) => view.activityOf(oid).name).join(', ')} – otwórz dzień, żeby go rozwiązać.</div>
       )}

@@ -42,10 +42,10 @@ export function Admin({ onClose }: { onClose: () => void }) {
 
 // ---------------- camp
 function CampForm({ camp, onSaved }: { camp: Camp | null; onSaved: (c: Camp) => void }) {
-  const [form, setForm] = useState<CampInput>({ name: '', days: [1, 2, 3].map((n) => ({ dayNo: n, date: null })), waves: {} })
+  const [form, setForm] = useState<CampInput>({ name: '', days: [1, 2, 3].map((n) => ({ dayNo: n, date: null })), waves: {}, waveEnds: {} })
   const [saved, setSaved] = useState(false)
   useEffect(() => {
-    if (camp) setForm({ name: camp.name, days: camp.days.map((d) => ({ dayNo: d.dayNo, date: d.date })), waves: camp.waves })
+    if (camp) setForm({ name: camp.name, days: camp.days.map((d) => ({ dayNo: d.dayNo, date: d.date })), waves: camp.waves, waveEnds: camp.waveEnds })
   }, [camp])
 
   const setDayCount = (n: number) =>
@@ -71,11 +71,18 @@ function CampForm({ camp, onSaved }: { camp: Camp | null; onSaved: (c: Camp) => 
           <input className="input" type="date" value={d.date ?? ''} onChange={(e) => setForm({ ...form, days: form.days.map((x, j) => (j === i ? { ...x, date: e.target.value || null } : x)) })} />
         </label>
       ))}
-      <div className="h3" style={{ margin: '10px 0 4px' }}>Start zapisów (fale)</div>
+      <div className="h3" style={{ margin: '10px 0 4px' }}>Zapisy (fale)</div>
+      <div className="small muted">Start i koniec zapisów dla grupy wiekowej. Koniec jest tylko informacyjny i można go pominąć.</div>
       {BRACKETS.map((b) => (
-        <label key={b}>{b}
-          <input className="input" type="date" value={form.waves[b] ?? ''} onChange={(e) => setForm({ ...form, waves: { ...form.waves, [b]: e.target.value || undefined } })} />
-        </label>
+        <div key={b} className="wave-row">
+          <b>{b}</b>
+          <label>od
+            <input className="input" type="date" value={form.waves[b] ?? ''} onChange={(e) => setForm({ ...form, waves: { ...form.waves, [b]: e.target.value || undefined } })} />
+          </label>
+          <label>do
+            <input className="input" type="date" disabled={!form.waves[b]} min={form.waves[b]} value={form.waveEnds[b] ?? ''} onChange={(e) => setForm({ ...form, waveEnds: { ...form.waveEnds, [b]: e.target.value || undefined } })} />
+          </label>
+        </div>
       ))}
       <button className="btn" onClick={save} disabled={!form.name.trim()}>{saved ? '✓ Zapisano' : 'Zapisz'}</button>
     </div>

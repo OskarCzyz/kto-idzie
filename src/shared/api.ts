@@ -24,12 +24,14 @@ export interface Camp {
   name: string
   days: CampDay[]
   waves: Partial<Record<Bracket, string>> // ISO date the bracket's external registration opens
+  waveEnds: Partial<Record<Bracket, string>> // ISO date it closes (informational)
 }
 
 export interface CampInput {
   name: string
   days: { dayNo: number; date: string | null }[]
   waves: Partial<Record<Bracket, string>>
+  waveEnds: Partial<Record<Bracket, string>>
 }
 
 export interface Photo {
