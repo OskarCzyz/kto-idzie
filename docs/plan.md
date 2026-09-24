@@ -19,8 +19,14 @@ Domain language: [CONTEXT.md](../CONTEXT.md). Decisions: [adr/](adr/). Prototype
   - day status
   - eligibility
   
-  The Worker computes a day snapshot with it, and the SPA uses the same code for optimistic updates.
-- **Live updates:** the SPA polls the day snapshot every 10 s. There are no notifications.
+- **Data flow:**
+  - `GET /api/state` returns the whole camp (~17 KB for 50 people), and the SPA runs `resolve` itself.
+  - `PUT /api/plan` replaces the caller's plan, which the server first normalizes with the same domain code.
+  - Edits are optimistic.
+- **Live updates:** the SPA polls `/api/state` every 10 s while visible. There are no notifications.
+- **Local dev:**
+  - `npm run db:migrate:local && npm run db:seed:local && npm run dev`
+  - Open `http://localhost:5173/?as=1`: Kuba, organizer. Use `?as=2` for Tomek, and so on.
 
 ## Layout
 
@@ -35,13 +41,13 @@ migrations/      D1 SQL migrations
 
 | # | Issue | Depends on |
 |---|-------|-----------|
-| 01 | [Skeleton: Worker + SPA + D1 + tests, deployable](issues/01-skeleton.md) | – |
-| 02 | [Domain core: ranking resolution](issues/02-domain-core.md) | 01 |
-| 03 | [Telegram auth + onboarding](issues/03-auth-onboarding.md) | 01 |
-| 04 | [Organizer admin: camp, activities, offerings, photos](issues/04-admin.md) | 03 |
-| 05 | [Day screen (read): current choice, options, who's going](issues/05-day-screen.md) | 02, 04 |
-| 06 | [Ranking editing: add/remove, drag & drop, conditions, status, conflicts](issues/06-ranking-editing.md) | 05 |
-| 07 | [Offering / person sheets, plan summary, wave countdown](issues/07-sheets-summary.md) | 05 |
-| 08 | [Live refresh + optimistic updates](issues/08-live.md) | 06 |
+| 01 ✅ | [Skeleton: Worker + SPA + D1 + tests, deployable](issues/01-skeleton.md) | – |
+| 02 ✅ | [Domain core: ranking resolution](issues/02-domain-core.md) | 01 |
+| 03 ✅ | [Telegram auth + onboarding](issues/03-auth-onboarding.md) | 01 |
+| 04 ✅ | [Organizer admin: camp, activities, offerings, photos](issues/04-admin.md) | 03 |
+| 05 ✅ | [Day screen (read): current choice, options, who's going](issues/05-day-screen.md) | 02, 04 |
+| 06 ✅ | [Ranking editing: add/remove, drag & drop, conditions, status, conflicts](issues/06-ranking-editing.md) | 05 |
+| 07 ✅ | [Offering / person sheets, plan summary, wave countdown](issues/07-sheets-summary.md) | 05 |
+| 08 ✅ (no change highlight yet) | [Live refresh + optimistic updates](issues/08-live.md) | 06 |
 | 09 | [Camp lifecycle: close camp, copy activities](issues/09-lifecycle.md) | 04 |
 | 10 | [Deploy + BotFather setup (human steps)](issues/10-deploy.md) | 01, 03 |

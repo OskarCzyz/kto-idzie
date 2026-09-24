@@ -169,3 +169,4 @@ function countAll(m: Map<unknown, Set<unknown>>): number {
   for (const s of m.values()) n += s.size
   return n
 }
+export * from './plan'

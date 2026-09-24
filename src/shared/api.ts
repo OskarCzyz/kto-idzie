@@ -1,5 +1,5 @@
 // Types of the HTTP API contract, shared by the Worker and the SPA.
-import type { Bracket, Gender } from '../domain'
+import type { Bracket, Gender, Plan } from '../domain'
 
 export interface Me {
   id: number
@@ -77,4 +77,24 @@ export interface ParticipantPatch {
   gender?: Gender
   bracket?: Bracket
   isOrganizer?: boolean
+}
+
+/** A participant as others see them (only onboarded participants are listed). */
+export interface PersonDto {
+  id: number
+  firstName: string
+  lastName: string | null
+  username: string | null
+  photoUrl: string | null
+  gender: Gender
+  bracket: Bracket
+}
+
+/** Everything the SPA needs; small enough (~50 people) to fetch whole and resolve on the client. */
+export interface CampState {
+  camp: Camp
+  activities: Activity[]
+  offerings: OfferingDto[]
+  people: PersonDto[]
+  plans: Plan[]
 }

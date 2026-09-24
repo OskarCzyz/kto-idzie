@@ -11,7 +11,8 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "deploy": "npm run build && wrangler deploy",
-    "typegen": "wrangler types src/worker/worker-configuration.d.ts"
+    "typegen": "wrangler types src/worker/worker-configuration.d.ts",
+    "db:seed:local": "node scripts/seed-local.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

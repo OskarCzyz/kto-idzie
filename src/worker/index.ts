@@ -3,6 +3,7 @@ import { auth, type AppEnv } from './auth'
 import { activeCamp } from './db'
 import { admin } from './routes/admin'
 import { me } from './routes/me'
+import { plan } from './routes/plan'
 
 const app = new Hono<AppEnv>().basePath('/api')
 
@@ -24,5 +25,6 @@ app.use('*', auth)
 app.route('/me', me)
 app.get('/camp', async (c) => c.json(await activeCamp(c.env.DB)))
 app.route('/admin', admin)
+app.route('/', plan)
 
 export default app
