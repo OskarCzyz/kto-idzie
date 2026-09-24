@@ -22,6 +22,16 @@ app.get('/photos/:key{.+}', async (c) => {
 })
 
 app.use('*', auth)
+
+// Any successful write bumps the version (1 row), which clients poll instead of the whole state.
+app.use('*', async (c, next) => {
+  await next()
+  if (c.req.method !== 'GET' && c.res.ok) await c.env.DB.prepare('UPDATE app_version SET v = v + 1 WHERE id = 1').run()
+})
+app.get('/version', async (c) => {
+  const row = await c.env.DB.prepare('SELECT v FROM app_version WHERE id = 1').first<{ v: number }>()
+  return c.json({ v: row?.v ?? 0 })
+})
 app.route('/me', me)
 app.get('/camp', async (c) => c.json(await activeCamp(c.env.DB)))
 app.route('/admin', admin)

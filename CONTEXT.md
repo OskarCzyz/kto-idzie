@@ -1,4 +1,4 @@
-# Activity Registration Helper
+# Kto idzie?
 
 A planning platform that helps participants of a camp decide which activities to sign up for by showing, publicly, what other participants intend. Actual sign-up happens in a separate, external system. The app is only needed during the weeks before the camp while people decide.
 

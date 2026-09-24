@@ -6,7 +6,8 @@ import { api } from './api'
 const POLL_MS = 10_000
 
 /**
- * Loads the whole camp state and keeps it fresh by polling while the app is visible.
+ * Loads the whole camp state and keeps it fresh while the app is visible: polls a version number
+ * and refetches the state only when it changed.
  * `savePlan` applies my plan locally at once (optimistic) and then stores it; the server's
  * normalized version replaces the local one when it comes back.
  */
@@ -20,23 +21,34 @@ export function useCampState(meId: number) {
     plans: [...s.plans.filter((p) => p.participantId !== meId), plan],
   })
 
+  const version = useRef<number | null>(null)
+
   const refresh = useCallback(async () => {
-    const fresh = await api<CampState | null>('/state')
-    if (pending.current === 0) setState(fresh)
+    const [v, fresh] = await Promise.all([api<{ v: number }>('/version'), api<CampState | null>('/state')])
+    if (pending.current === 0) {
+      version.current = v.v
+      setState(fresh)
+    }
   }, [])
+
+  /** Cheap poll: one-row version check, full state only when something changed. */
+  const poll = useCallback(async () => {
+    const { v } = await api<{ v: number }>('/version')
+    if (v !== version.current) await refresh()
+  }, [refresh])
 
   useEffect(() => {
     void refresh()
     const id = setInterval(() => {
-      if (document.visibilityState === 'visible') void refresh().catch(() => {})
+      if (document.visibilityState === 'visible') void poll().catch(() => {})
     }, POLL_MS)
-    const onVisible = () => document.visibilityState === 'visible' && void refresh().catch(() => {})
+    const onVisible = () => document.visibilityState === 'visible' && void poll().catch(() => {})
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       clearInterval(id)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [refresh])
+  }, [refresh, poll])
 
   const savePlan = useCallback(
     async (plan: Plan) => {

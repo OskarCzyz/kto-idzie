@@ -1,22 +1,22 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "activity-registration-helper",
+  "name": "kto-idzie",
   "main": "./src/worker/index.ts",
   "compatibility_date": "2025-09-01",
   "assets": {
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  // Replace database_id with the real one from `wrangler d1 create activity-helper` (issue 10).
+  // Replace database_id with the real one from `wrangler d1 create kto-idzie` (issue 10).
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "activity-helper",
+      "database_name": "kto-idzie",
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "activity-helper-photos" }],
+  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "kto-idzie-photos" }],
   "vars": {
     "DEV_AUTH": "0",
     "ORGANIZER_TELEGRAM_IDS": ""

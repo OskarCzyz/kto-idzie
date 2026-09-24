@@ -32,16 +32,25 @@ export const auth = createMiddleware<AppEnv>(async (c, next) => {
   const organizerIds = c.env.ORGANIZER_TELEGRAM_IDS.split(',').map((s: string) => s.trim()).filter(Boolean)
   const seededOrganizer = organizerIds.includes(String(user.id)) || (c.env.DEV_AUTH === '1' && user.id === 1) ? 1 : 0
 
-  const me = await c.env.DB.prepare(
-    `INSERT INTO participant (telegram_id, first_name, last_name, username, photo_url, is_organizer)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-     ON CONFLICT (telegram_id) DO UPDATE SET
-       first_name = excluded.first_name, last_name = excluded.last_name, username = excluded.username,
-       photo_url = excluded.photo_url, is_organizer = MAX(participant.is_organizer, excluded.is_organizer)
-     RETURNING *`,
-  )
-    .bind(user.id, user.first_name, user.last_name ?? null, user.username ?? null, user.photo_url ?? null, seededOrganizer)
-    .first<ParticipantRow>()
+  // Read first and write only when something changed: this runs on every request, including polls,
+  // and D1's free tier allows far fewer writes than reads.
+  const db = c.env.DB
+  let me = await db.prepare('SELECT * FROM participant WHERE telegram_id = ?1').bind(user.id).first<ParticipantRow>()
+  const fresh = { first_name: user.first_name, last_name: user.last_name ?? null, username: user.username ?? null, photo_url: user.photo_url ?? null }
+  if (!me) {
+    me = await db
+      .prepare('INSERT INTO participant (telegram_id, first_name, last_name, username, photo_url, is_organizer) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING *')
+      .bind(user.id, fresh.first_name, fresh.last_name, fresh.username, fresh.photo_url, seededOrganizer)
+      .first<ParticipantRow>()
+  } else if (
+    me.first_name !== fresh.first_name || me.last_name !== fresh.last_name || me.username !== fresh.username ||
+    me.photo_url !== fresh.photo_url || (seededOrganizer && !me.is_organizer)
+  ) {
+    me = await db
+      .prepare('UPDATE participant SET first_name = ?1, last_name = ?2, username = ?3, photo_url = ?4, is_organizer = MAX(is_organizer, ?5) WHERE id = ?6 RETURNING *')
+      .bind(fresh.first_name, fresh.last_name, fresh.username, fresh.photo_url, seededOrganizer, me.id)
+      .first<ParticipantRow>()
+  }
   c.set('me', me!)
   await next()
 })
