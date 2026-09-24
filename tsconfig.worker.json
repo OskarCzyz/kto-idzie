@@ -6,5 +6,5 @@
     "lib": ["ES2022"],
     "types": []
   },
-  "include": ["src/worker", "src/domain"]
+  "include": ["src/worker", "src/domain", "src/shared"]
 }

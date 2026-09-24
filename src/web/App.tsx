@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react'
-
-type Health = { ok: boolean; camps: number }
+import type { Me } from '../shared/api'
+import { api } from './api'
+import { Onboarding } from './Onboarding'
 
 export function App() {
-  const [health, setHealth] = useState<Health | string>('…')
+  const [me, setMe] = useState<Me | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.json() as Promise<Health>)
-      .then(setHealth)
-      .catch((e: unknown) => setHealth(String(e)))
+    api<Me>('/me').then(setMe, (e: unknown) => setError(String(e)))
   }, [])
 
+  if (error) return <div className="center">Nie udało się połączyć. Otwórz aplikację z Telegrama.<br />{error}</div>
+  if (!me) return <div className="center muted">Ładowanie…</div>
+  if (!me.onboarded) return <Onboarding me={me} onDone={setMe} />
   return (
-    <main>
-      <h1>Obóz – aktywności</h1>
-      <pre>{typeof health === 'string' ? health : JSON.stringify(health)}</pre>
-    </main>
+    <div className="page">
+      <div className="pad">
+        <h1 style={{ fontSize: 20 }}>Cześć {me.firstName}</h1>
+        <p className="muted">{me.gender === 'M' ? 'Chłopak' : 'Dziewczyna'} · {me.bracket}{me.isOrganizer ? ' · organizator' : ''}</p>
+      </div>
+    </div>
   )
 }

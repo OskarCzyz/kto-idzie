@@ -1,0 +1,49 @@
+/* Telegram injects --tg-theme-* variables; fallbacks are for local dev in a browser. */
+:root {
+  --bg: var(--tg-theme-secondary-bg-color, #eef0f4);
+  --card: var(--tg-theme-bg-color, #fff);
+  --text: var(--tg-theme-text-color, #1c1c1e);
+  --muted: var(--tg-theme-hint-color, #80868f);
+  --accent: var(--tg-theme-button-color, #2481cc);
+  --accent-text: var(--tg-theme-button-text-color, #fff);
+  --danger: var(--tg-theme-destructive-text-color, #e5533d);
+  --line: color-mix(in srgb, var(--muted) 25%, transparent);
+  --chip: color-mix(in srgb, var(--muted) 16%, var(--card));
+  --ok: #2e9d5b;
+  --wait: #c98f00;
+  --cond: #7b5cd6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: var(--tg-theme-secondary-bg-color, #0f1115);
+    --card: var(--tg-theme-bg-color, #1b1e24);
+    --text: var(--tg-theme-text-color, #eceef2);
+    --muted: var(--tg-theme-hint-color, #8c93a0);
+    --accent: var(--tg-theme-button-color, #4ea4e6);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.35 -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+input, textarea, select { font: inherit; color: inherit; }
+.page { max-width: 480px; margin: 0 auto; min-height: 100vh; padding-bottom: 90px; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+.b { font-weight: 600; }
+.row { display: flex; align-items: center; gap: 8px; }
+.sp { flex: 1; }
+.card { background: var(--card); border-radius: 14px; margin: 8px 16px; overflow: hidden; }
+.pad { padding: 12px 14px; }
+.h3 { font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 16px 4px; font-weight: 600; }
+.btn { display: inline-block; padding: 10px 14px; border-radius: 10px; background: var(--accent); color: var(--accent-text); font-weight: 600; text-align: center; }
+.btn.ghost { background: var(--chip); color: var(--text); }
+.btn.sm { padding: 6px 10px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 99px; background: var(--chip); font-size: 13px; white-space: nowrap; }
+.chip.on { background: var(--accent); color: var(--accent-text); }
+.choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.choice-grid.three { grid-template-columns: repeat(3, 1fr); }
+.choice { padding: 16px 8px; border-radius: 12px; background: var(--chip); text-align: center; font-weight: 600; }
+.choice.on { background: var(--accent); color: var(--accent-text); }
+.center { display: flex; min-height: 60vh; align-items: center; justify-content: center; padding: 16px; text-align: center; }
+.input { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }

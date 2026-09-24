@@ -7,5 +7,5 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  "include": ["src/web", "src/domain"]
+  "include": ["src/web", "src/domain", "src/shared"]
 }
