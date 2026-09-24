@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Activity, Camp, CampInput, OfferingDto, OfferingInput, ParticipantDto } from '../shared/api'
 import type { Bracket, Gender } from '../domain'
 import { api } from './api'
+import { Thumb } from './ui'
 import { confirmAsync } from './telegram'
 
 const BRACKETS: Bracket[] = ['U15', 'U18', 'O18']
@@ -116,7 +117,7 @@ function Activities({ activities, reload }: { activities: Activity[]; reload: ()
           <ActivityForm key={a.id} activity={a} onDone={() => { setEditing(null); void reload() }} />
         ) : (
           <div key={a.id} className="card pad row" onClick={() => setEditing(a.id)} style={{ cursor: 'pointer' }}>
-            {a.photos[0] ? <img src={a.photos[0].url} className="thumb" alt="" /> : <div className="thumb" />}
+            <Thumb activity={a} size={56} />
             <div style={{ minWidth: 0 }}>
               <div className="b">{a.name}</div>
               <div className="small muted ellipsis">{a.description || '—'}</div>
@@ -131,32 +132,27 @@ function Activities({ activities, reload }: { activities: Activity[]; reload: ()
 function ActivityForm({ activity, onDone }: { activity?: Activity; onDone: () => void }) {
   const [name, setName] = useState(activity?.name ?? '')
   const [description, setDescription] = useState(activity?.description ?? '')
-  const [photos, setPhotos] = useState(activity?.photos ?? [])
+  const [logo, setLogo] = useState<File | null>(null) // picked but not uploaded yet
+  const [logoUrl, setLogoUrl] = useState(activity?.logoUrl ?? null)
+  const [removeLogo, setRemoveLogo] = useState(false)
   const [busy, setBusy] = useState(false)
+  const preview = logo ? URL.createObjectURL(logo) : removeLogo ? null : logoUrl
 
   async function save() {
-    if (activity) await api(`/admin/activities/${activity.id}`, { method: 'PUT', body: { name, description } })
-    else await api('/admin/activities', { method: 'POST', body: { name, description } })
-    onDone()
-  }
-  async function upload(files: FileList | null) {
-    if (!activity || !files) return
     setBusy(true)
     try {
-      for (const file of files) {
+      let id = activity?.id
+      if (id) await api(`/admin/activities/${id}`, { method: 'PUT', body: { name, description } })
+      else id = (await api<{ id: number }>('/admin/activities', { method: 'POST', body: { name, description } })).id
+      if (logo) {
         const fd = new FormData()
-        fd.append('file', file)
-        await api(`/admin/activities/${activity.id}/photos`, { method: 'POST', body: fd })
-      }
-      const fresh = (await api<Activity[]>('/admin/activities')).find((a) => a.id === activity.id)
-      setPhotos(fresh?.photos ?? [])
+        fd.append('file', logo)
+        await api(`/admin/activities/${id}/logo`, { method: 'PUT', body: fd })
+      } else if (removeLogo) await api(`/admin/activities/${id}/logo`, { method: 'DELETE' })
+      onDone()
     } finally {
       setBusy(false)
     }
-  }
-  async function removePhoto(id: number) {
-    await api(`/admin/photos/${id}`, { method: 'DELETE' })
-    setPhotos((p) => p.filter((x) => x.id !== id))
   }
   async function remove() {
     if (!activity || !(await confirmAsync(`Usunąć „${activity.name}” razem z jej ofertami i wyborami?`))) return
@@ -166,26 +162,22 @@ function ActivityForm({ activity, onDone }: { activity?: Activity; onDone: () =>
 
   return (
     <div className="card pad form">
-      <label>Nazwa<input className="input" value={name} onChange={(e) => setName(e.target.value)} /></label>
-      <label>Krótki opis<textarea className="input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} /></label>
-      {activity ? (
-        <div>
-          <div className="small muted">Zdjęcia</div>
-          <div className="row" style={{ flexWrap: 'wrap', marginTop: 6 }}>
-            {photos.map((p) => (
-              <div key={p.id} style={{ position: 'relative' }}>
-                <img src={p.url} className="thumb" alt="" />
-                <button className="thumb-x" onClick={() => removePhoto(p.id)}>✕</button>
-              </div>
-            ))}
-            <label className="thumb add">{busy ? '…' : '+'}<input type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} /></label>
-          </div>
+      <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
+        <label className="logo-pick">
+          {preview ? <img src={preview} alt="" /> : <span>+ logo</span>}
+          <input type="file" accept="image/*" hidden onChange={(e) => { setLogo(e.target.files?.[0] ?? null); setRemoveLogo(false) }} />
+        </label>
+        <div style={{ flex: 1, display: 'grid', gap: 10 }}>
+          <label>Nazwa<input className="input" value={name} onChange={(e) => setName(e.target.value)} /></label>
+          {preview && (
+            <button className="small danger" style={{ justifySelf: 'start' }} onClick={() => { setLogo(null); setRemoveLogo(true); setLogoUrl(null) }}>usuń logo</button>
+          )}
         </div>
-      ) : (
-        <div className="small muted">Zdjęcia dodasz po zapisaniu.</div>
-      )}
+      </div>
+      <label>Krótki opis<textarea className="input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+      <div className="small muted">Logo: kwadratowy obrazek (PNG/JPG, do 5 MB), np. ikona jak w aplikacji wydarzenia.</div>
       <div className="row">
-        <button className="btn" onClick={save} disabled={!name.trim()}>Zapisz</button>
+        <button className="btn" onClick={save} disabled={!name.trim() || busy}>{busy ? 'Zapisuję…' : 'Zapisz'}</button>
         <button className="btn ghost" onClick={onDone}>Anuluj</button>
         <span className="sp" />
         {activity && <button className="btn ghost danger" onClick={remove}>Usuń</button>}

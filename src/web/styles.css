@@ -55,8 +55,6 @@ input, textarea, select { font: inherit; color: inherit; }
 .form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .form label.row { display: flex; color: var(--text); }
 .thumb { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: var(--chip); flex: none; display: flex; align-items: center; justify-content: center; }
-.thumb.add { font-size: 24px; cursor: pointer; color: var(--muted); }
-.thumb-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #000a; color: #fff; font-size: 11px; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .danger { color: var(--danger) !important; }
 .av { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: 700; flex: none; object-fit: cover; }
@@ -110,8 +108,6 @@ input, textarea, select { font: inherit; color: inherit; }
 .pi { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
 .stepper { display: flex; align-items: center; gap: 14px; }
 .stepper button { width: 36px; height: 36px; border-radius: 50%; background: var(--chip); font-size: 20px; }
-.photos { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x mandatory; }
-.photos img { height: 180px; border-radius: 12px; scroll-snap-align: start; flex: none; max-width: 90%; object-fit: cover; }
 .toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 80; background: #111d; color: #fff; padding: 7px 13px; border-radius: 99px; font-size: 13px; }
 .thumb { border-radius: 12px; }
 .btn { border-radius: 8px; }
@@ -147,3 +143,6 @@ input, textarea, select { font: inherit; color: inherit; }
 .wave-row { display: grid; grid-template-columns: 40px 1fr 1fr; gap: 8px; align-items: end; }
 .wave-row b { padding-bottom: 10px; }
 .input:disabled { opacity: .4; }
+.logo-pick { width: 88px; height: 88px; border-radius: 16px; background: var(--chip); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; flex: none; color: var(--muted) !important; font-size: 13px !important; }
+.logo-pick img { width: 100%; height: 100%; object-fit: cover; }
+img.thumb { object-fit: cover; }

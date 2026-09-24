@@ -13,7 +13,7 @@ One day of the camp. A participant can be registered for at most one activity pe
 _Avoid_: Slot, session
 
 **Activity**:
-Something to do at the camp (e.g. kayaking), with a name, a short description and photos, entered manually by the organizer. A camp has about 20–30. An activity can be offered on several camp days. Activities outlive a camp, so they can be copied into the next one. Participants, offerings and picks are deleted when the camp ends.
+Something to do at the camp (e.g. kayaking), with a name, a short description and one logo image, entered manually by the organizer. A camp has about 20–30. An activity can be offered on several camp days. Activities outlive a camp, so they can be copied into the next one. Participants, offerings and picks are deleted when the camp ends.
 _Avoid_: Event, workshop, session
 
 **Offering**:

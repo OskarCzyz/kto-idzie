@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { setCondition, type Condition, type Plan } from '../domain'
 import { ConditionLine } from './parts'
-import { Avatar, Sheet } from './ui'
+import { Avatar, Sheet, Thumb } from './ui'
 import { STATUS_ICON, STATUS_LABEL, eligibilityText, fullName, toDomainOffering, type View } from './view'
 import { eligible } from '../domain'
 
@@ -13,8 +13,10 @@ export function OfferingSheet({ view, oid, day, onClose, openPerson }: { view: V
   const considering = view.considering(oid, d)
   return (
     <Sheet onClose={onClose}>
-      {a.photos.length > 0 && <div className="photos sec">{a.photos.map((p) => <img key={p.id} src={p.url} alt="" />)}</div>}
-      <div className="sec">
+      <div className="sec" style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
+        <Thumb activity={a} size={120} />
+      </div>
+      <div className="sec" style={{ textAlign: 'center' }}>
         <div className="b" style={{ fontSize: 19 }}>{a.name}</div>
         <div className="small muted">{o.dayIds.map((x) => `Dzień ${view.dayNo(x)}`).join(', ')}{eligibilityText(o) && ` · ${eligibilityText(o)}`}</div>
         {a.description && <div className="small" style={{ margin: '6px 0' }}>{a.description}</div>}

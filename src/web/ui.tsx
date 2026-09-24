@@ -14,10 +14,10 @@ export function Avatar({ person, me, size = 24 }: { person: PersonDto; me?: bool
   )
 }
 
-/** First photo of the activity, or a coloured tile with its initial. */
+/** The activity's logo on its tile, or a coloured tile with its initial. */
 export function Thumb({ activity, size = 44 }: { activity: Activity; size?: number }) {
-  const photo = activity.photos[0]
-  if (photo) return <img src={photo.url} className="thumb" style={{ width: size, height: size }} alt="" />
+  const [bg] = TILES[activity.id % TILES.length]!
+  if (activity.logoUrl) return <img src={activity.logoUrl} className="thumb" style={{ width: size, height: size, background: bg }} alt="" />
   return (
     <span className="thumb" style={{ width: size, height: size, background: TILES[activity.id % TILES.length]![0], color: TILES[activity.id % TILES.length]![1], fontFamily: 'var(--serif)', fontWeight: 700, fontSize: size * 0.45 }}>
       {activity.name.slice(0, 1)}

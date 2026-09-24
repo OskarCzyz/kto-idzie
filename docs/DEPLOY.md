@@ -9,9 +9,9 @@ Całość zajmuje ok. 30–45 minut. Na darmowym planie Cloudflare dla ~50 osób
 ## 1. Konto Cloudflare
 
 1. Załóż darmowe konto: <https://dash.cloudflare.com/sign-up>.
-2. **Włącz R2** (na zdjęcia aktywności): w panelu wejdź w **R2 Object Storage** → **Enable R2 / Purchase R2 Plan**. Wybierz darmowy plan (10 GB za darmo).
+2. **Włącz R2** (na loga aktywności): w panelu wejdź w **R2 Object Storage** → **Enable R2 / Purchase R2 Plan**. Wybierz darmowy plan (10 GB za darmo).
 
-> ⚠️ Cloudflare wymaga przy R2 podpięcia karty, choć przy naszym użyciu (kilkadziesiąt zdjęć) nic nie pobierze. Jeśli nie chcesz podawać karty, daj znać: przerobię zdjęcia tak, żeby trzymały się w bazie D1 i R2 nie będzie potrzebne.
+> ⚠️ Cloudflare wymaga przy R2 podpięcia karty, choć przy naszym użyciu (kilkadziesiąt obrazków) nic nie pobierze. Jeśli nie chcesz podawać karty, daj znać: przerobię zdjęcia tak, żeby trzymały się w bazie D1 i R2 nie będzie potrzebne.
 
 ## 2. Zaloguj wranglera
 
@@ -105,7 +105,7 @@ Link do aplikacji to: **`https://t.me/<username_bota>?startapp`**, np. `https://
 1. Otwórz link z kroku 10 na telefonie. Wybierz płeć i grupę wiekową.
 2. Kliknij ⚙️ (panel organizatora):
    - **Obóz:** nazwa `Nyttårs camp 2026`, liczba dni i daty (28.12–1.01), daty startu (i opcjonalnie końca) zapisów dla U15/U18/O18. Kliknij Zapisz.
-   - **Aktywności:** dodaj każdą z nazwą i krótkim opisem. Potem otwórz ją ponownie i dodaj zdjęcia.
+   - **Aktywności:** dodaj każdą z nazwą, krótkim opisem i logo (jeden kwadratowy obrazek).
    - **Oferty:** dla każdej aktywności wskaż, w które dni jest dostępna, dla kogo (chłopcy/dziewczyny, U15/U18/O18), limit miejsc i 🔥, jeśli jest na nią duże zainteresowanie. Kilka dni w jednej ofercie oznacza aktywność wielodniową.
 3. Sprawdź dzień lub dwa jako uczestnik: dodaj coś do rankingu, przeciągnij, ustaw warunek.
 
@@ -138,4 +138,4 @@ Link do aplikacji to: **`https://t.me/<username_bota>?startapp`**, np. `https://
 
 - **Workers:** 100 000 zapytań dziennie. Otwarta aplikacja robi 1 zapytanie na 10 s, więc 50 osób × 3 godziny to ok. 54 000.
 - **D1:** 5 mln odczytów i 100 tys. zapisów dziennie. Co 10 s aplikacja sprawdza tylko numer wersji (1 wiersz), a pełny stan pobiera dopiero, gdy ktoś coś zmieni.
-- **R2:** 10 GB. Zdjęcia są ograniczone do 5 MB sztuka.
+- **R2:** 10 GB. Logo jest ograniczone do 5 MB.

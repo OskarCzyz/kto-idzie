@@ -34,16 +34,11 @@ export interface CampInput {
   waveEnds: Partial<Record<Bracket, string>>
 }
 
-export interface Photo {
-  id: number
-  url: string
-}
-
 export interface Activity {
   id: number
   name: string
   description: string
-  photos: Photo[]
+  logoUrl: string | null // one logo per activity, like the BCC app's activity tiles
 }
 
 export interface ActivityInput {

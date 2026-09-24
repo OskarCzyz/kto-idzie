@@ -44,7 +44,7 @@ admin.put('/camp', async (c) => {
 
 /**
  * Ends the camp: deletes it with its days, waves, offerings, picks and statuses (cascade), and all
- * non-organizer participants. Activities and photos stay for the next camp. Organizers stay but must
+ * non-organizer participants. Activities and their logos stay for the next camp. Organizers stay but must
  * pick their age bracket again.
  */
 admin.post('/camp/close', async (c) => {
@@ -88,24 +88,26 @@ admin.delete('/activities/:id', async (c) => {
   return c.json({ ok: true })
 })
 
-admin.post('/activities/:id/photos', async (c) => {
+async function deleteLogo(env: Env, activityId: number) {
+  const { results } = await env.DB.prepare('DELETE FROM activity_photo WHERE activity_id = ?1 RETURNING r2_key').bind(activityId).all<{ r2_key: string }>()
+  if (results.length) await env.PHOTOS.delete(results.map((r) => r.r2_key))
+}
+
+/** Sets the activity's logo, replacing the previous one. */
+admin.put('/activities/:id/logo', async (c) => {
   const id = Number(c.req.param('id'))
   const file = (await c.req.formData()).get('file')
   if (!(file instanceof File) || !file.type.startsWith('image/')) return bad('file')
   if (file.size > MAX_PHOTO_BYTES) return bad('too-large')
   const key = `${id}/${crypto.randomUUID()}`
   await c.env.PHOTOS.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } })
-  await c.env.DB.prepare(
-    'INSERT INTO activity_photo (activity_id, r2_key, position) VALUES (?1, ?2, (SELECT COUNT(*) FROM activity_photo WHERE activity_id = ?1))',
-  )
-    .bind(id, key)
-    .run()
+  await deleteLogo(c.env, id)
+  await c.env.DB.prepare('INSERT INTO activity_photo (activity_id, r2_key, position) VALUES (?1, ?2, 0)').bind(id, key).run()
   return c.json({ ok: true })
 })
 
-admin.delete('/photos/:id', async (c) => {
-  const row = await c.env.DB.prepare('DELETE FROM activity_photo WHERE id = ?1 RETURNING r2_key').bind(Number(c.req.param('id'))).first<{ r2_key: string }>()
-  if (row) await c.env.PHOTOS.delete(row.r2_key)
+admin.delete('/activities/:id/logo', async (c) => {
+  await deleteLogo(c.env, Number(c.req.param('id')))
   return c.json({ ok: true })
 })
 
