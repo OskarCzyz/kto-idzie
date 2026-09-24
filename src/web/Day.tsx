@@ -20,7 +20,6 @@ export function Day({ view, day, edit, openOffering, openPerson, openCondition }
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const me = view.me.id
-  const campDay = view.state.camp.days.find((d) => d.id === day)!
   const ranking = view.myPlan.rankings[day] ?? []
   const current = view.res.currentChoice(me, day)
   const status = view.status(me, day)
@@ -51,12 +50,8 @@ export function Day({ view, day, edit, openOffering, openPerson, openCondition }
     edit((p) => setDayStatus(p, day, s, view.offerings))
   }
 
-  const dateText = campDay.date ? new Date(campDay.date + 'T00:00:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'numeric' }) : ''
-
   return (
     <>
-      <h2 className="q">Dzień {campDay.dayNo}{dateText && <span className="muted" style={{ fontSize: 15, fontWeight: 500 }}> · {dateText}</span>}</h2>
-
       <div className="now">
         <div className="small muted">Gdyby zapisy były teraz, poszedłbyś na:</div>
         {current != null ? (

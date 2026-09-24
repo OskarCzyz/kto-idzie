@@ -6,7 +6,7 @@ export function Summary({ view, goToDay }: { view: View; goToDay: (index: number
   const conflicts = view.res.conflicts(me)
   return (
     <>
-      <h2 className="q">Twój plan</h2>
+      <h2 className="q" style={{ paddingTop: 14 }}>Twój plan</h2>
       {conflicts.length > 0 && (
         <div className="warn">⚠️ Masz konflikt: {conflicts.map((oid) => view.activityOf(oid).name).join(', ')} – otwórz dzień, żeby go rozwiązać.</div>
       )}

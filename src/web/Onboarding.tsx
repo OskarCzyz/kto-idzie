@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Me } from '../shared/api'
 import { api } from './api'
+import { Hero } from './Hero'
 
 export function Onboarding({ me, onDone }: { me: Me; onDone: (me: Me) => void }) {
   const [gender, setGender] = useState(me.gender)
@@ -18,6 +19,7 @@ export function Onboarding({ me, onDone }: { me: Me; onDone: (me: Me) => void })
 
   return (
     <div className="page">
+      <Hero />
       <div className="pad">
         <h1 style={{ fontSize: 22 }}>Cześć {me.firstName}! 👋</h1>
         <p className="muted">Dwie rzeczy, żeby pokazać Ci aktywności, na które możesz się zapisać.</p>
