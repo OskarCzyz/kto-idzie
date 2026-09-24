@@ -1,6 +1,6 @@
 # Plan
 
-Domain language: [CONTEXT.md](../CONTEXT.md). Decisions: [adr/](adr/). Prototype that the UI follows: [prototype/ranking.PROTOTYPE.html](../prototype/ranking.PROTOTYPE.html) (the day-by-day ranking screen, based on prototype variant C).
+Domain language: [CONTEXT.md](../CONTEXT.md). Decisions: [adr/](adr/). Prototype that the UI follows: `prototype/ranking.PROTOTYPE.html` on branch `prototype/ui` (the day-by-day ranking screen, based on prototype variant C).
 
 ## Architecture
 
