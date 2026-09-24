@@ -8,5 +8,4 @@
   - Undoing Zapisany asks for confirmation.
   - A new #1 resets the day to Wondering.
 - Conflict banner: "X w oba dni" (X on both days) / "Usuń X" (remove X).
-- Warning when the same activity is the current choice on more than one day.
 - Server enforces: eligibility, one pick per offering per participant, and consistent ranks.

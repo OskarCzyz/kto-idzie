@@ -165,6 +165,35 @@ describe('resolve', () => {
       expect(r.conflicts(1)).toEqual([])
     })
 
+    it('an unmet condition drops it on all its days without a conflict, even if met on some days', () => {
+      // #1 on both days, "if 2 goes" – 2 has theatre only on day 1 (inconsistent data), so the condition fails on day 2
+      const r = resolve({
+        participants: [boy(1), boy(2)],
+        offerings: ms,
+        plans: [
+          plan(1, { rankings: { 1: [THEATRE, KAYAK], 2: [THEATRE, CLIMB] }, conditions: { [THEATRE]: { kind: 'people', people: [2] } } }),
+          plan(2, { rankings: { 1: [THEATRE], 2: [CLIMB] } }),
+        ],
+      })
+      expect(r.conflicts(1)).toEqual([])
+      expect(r.currentChoice(1, 1)).toBe(KAYAK)
+      expect(r.currentChoice(1, 2)).toBe(CLIMB)
+      expect(r.conditionMet(1, THEATRE, 1)).toBe(false)
+    })
+
+    it('with a condition met on all its days it is the current choice everywhere', () => {
+      const r = resolve({
+        participants: [boy(1), boy(2)],
+        offerings: ms,
+        plans: [
+          plan(1, { rankings: { 1: [THEATRE, KAYAK], 2: [THEATRE, CLIMB] }, conditions: { [THEATRE]: { kind: 'min', min: 1 } } }),
+          plan(2, { rankings: { 1: [THEATRE], 2: [THEATRE] } }),
+        ],
+      })
+      expect([r.currentChoice(1, 1), r.currentChoice(1, 2)]).toEqual([THEATRE, THEATRE])
+      expect(r.conflicts(1)).toEqual([])
+    })
+
     it('is a conflict when a condition makes the other day win', () => {
       // day 2: climbing only if 2 goes – he does, so climbing beats theatre on day 2
       const r = resolve({

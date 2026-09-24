@@ -34,13 +34,6 @@ export function Day({ view, day, edit, openOffering, openPerson, openCondition }
     .sort((a, b) => view.goers(b.id, day, filter).length - view.goers(a.id, day, filter).length)
   const undecided = view.undecided(day, filter)
 
-  // Same activity as current choice on several days is allowed but not encouraged.
-  const currentActivity = current != null ? view.offering(current).activityId : null
-  const repeatedOn = view.state.camp.days.filter((d) => {
-    const c = d.id !== day ? view.res.currentChoice(me, d.id) : null
-    return c != null && current != null && c !== current && view.offering(c).activityId === currentActivity
-  })
-
   async function setStatus(s: StoredDayStatus) {
     const top = ranking[0]
     if (s !== 'wondering' && top != null && current !== top) {
@@ -77,9 +70,11 @@ export function Day({ view, day, edit, openOffering, openPerson, openCondition }
       {conflicts.map((oid) => {
         const o = view.offering(oid)
         const name = view.activityOf(oid).name
-        const preferred = o.dayIds
-          .filter((d) => view.myPlan.rankings[d]?.[0] !== oid)
-          .map((d) => `dzień ${view.dayNo(d)}: ${view.activityOf(view.myPlan.rankings[d]![0]!).name}`)
+        // Days where something ranked higher wins instead of this multi-day pick.
+        const preferred = o.dayIds.flatMap((d) => {
+          const c = view.res.currentChoice(me, d)
+          return c != null && c !== oid ? [`dzień ${view.dayNo(d)}: ${view.activityOf(c).name}`] : []
+        })
         return (
           <div key={oid} className="warn">
             ⚠️ <b>{name}</b> trwa {view.daysText(o)}, ale wolisz coś innego ({preferred.join(', ')}). Dopóki nie wybierzesz, {name} się nie liczy.
@@ -90,9 +85,6 @@ export function Day({ view, day, edit, openOffering, openPerson, openCondition }
           </div>
         )
       })}
-      {repeatedOn.length > 0 && (
-        <div className="warn">ℹ️ „{view.activityOf(current!).name}” wybierasz też w dniu {repeatedOn.map((d) => d.dayNo).join(', ')}. Można, ale nie jest to zalecane.</div>
-      )}
 
       <div className="h3">Twój ranking ({ranking.length})</div>
       <Ranking view={view} day={day} filter={filter} edit={edit} openOffering={openOffering} openCondition={openCondition} />

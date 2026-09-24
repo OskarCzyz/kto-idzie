@@ -46,6 +46,7 @@ export interface Resolution {
   currentChoice(participant: ParticipantId, day: DayId): OfferingId | null
   /** Multi-day picks outranked on one of their days while they would otherwise win. */
   conflicts(participant: ParticipantId): OfferingId[]
+  /** For a multi-day pick: met on every day it covers. */
   conditionMet(participant: ParticipantId, offering: OfferingId, day: DayId): boolean
 }
 
@@ -71,9 +72,7 @@ export function resolve(input: { participants: Participant[]; offerings: Offerin
   const conflicted = new Map<ParticipantId, Set<OfferingId>>(plans.map((p) => [p.participantId, new Set()]))
   const dropped = new Map<ParticipantId, Set<OfferingId>>(plans.map((p) => [p.participantId, new Set()]))
 
-  const conditionHolds = (plan: Plan, oid: OfferingId, day: DayId, cur: Choices): boolean => {
-    const c = plan.conditions[oid]
-    if (!c) return true
+  const holdsOnDay = (plan: Plan, c: Condition, oid: OfferingId, day: DayId, cur: Choices): boolean => {
     if (c.kind === 'people') return c.people.every((q) => cur.get(q)?.get(day) === oid)
     const gender = participants.get(plan.participantId)!.gender
     let n = 0
@@ -81,6 +80,13 @@ export function resolve(input: { participants: Participant[]; offerings: Offerin
       if (q !== plan.participantId && participants.get(q)?.gender === gender && choices.get(day) === oid) n++
     }
     return n >= c.min
+  }
+  // A multi-day pick is all or nothing, so its condition must hold on every day it covers.
+  const conditionHolds = (plan: Plan, oid: OfferingId, cur: Choices): boolean => {
+    const c = plan.conditions[oid]
+    if (!c) return true
+    const days = offerings.get(oid)?.days ?? []
+    return days.every((d) => holdsOnDay(plan, c, oid, d, cur))
   }
 
   const step = (cur: Choices): Choices => {
@@ -96,7 +102,7 @@ export function resolve(input: { participants: Participant[]; offerings: Offerin
           status === 'decided' || status === 'registered'
             ? (ranking[0] ?? null)
             : (ranking.find(
-                (oid) => !conflicted.get(pid)!.has(oid) && !dropped.get(pid)!.has(oid) && conditionHolds(plan, oid, day, cur),
+                (oid) => !conflicted.get(pid)!.has(oid) && !dropped.get(pid)!.has(oid) && conditionHolds(plan, oid, cur),
               ) ?? null),
         )
       }
@@ -130,7 +136,7 @@ export function resolve(input: { participants: Participant[]; offerings: Offerin
       for (const day of days) {
         if (dayStatus(plan, day) !== 'wondering') continue
         for (const oid of plan.rankings[day] ?? []) {
-          if (!dropped.get(plan.participantId)!.has(oid) && !conditionHolds(plan, oid, day, cur)) {
+          if (!dropped.get(plan.participantId)!.has(oid) && !conditionHolds(plan, oid, cur)) {
             dropped.get(plan.participantId)!.add(oid)
             droppedAny = true
           }
@@ -157,9 +163,9 @@ export function resolve(input: { participants: Participant[]; offerings: Offerin
         }),
       )
     },
-    conditionMet: (pid, oid, day) => {
+    conditionMet: (pid, oid) => {
       const plan = planOf.get(pid)
-      return plan ? conditionHolds(plan, oid, day, final) : false
+      return plan ? conditionHolds(plan, oid, final) : false
     },
   }
 }

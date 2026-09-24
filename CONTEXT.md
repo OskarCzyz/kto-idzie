@@ -57,7 +57,7 @@ One offering placed in a participant's ranking, with its rank and an optional co
 _Avoid_: Choice, vote, interest, backup
 
 **Condition**:
-A requirement attached to a pick: specific named participants, or at least N other participants of the participant's own gender, who have the same offering as their current choice. It is *met* when this is true.
+A requirement attached to a pick: specific named participants, or at least N other participants of the participant's own gender, who have the same offering as their current choice. It is *met* when this is true. For a multi-day pick it must be met on every day the pick covers.
 _Avoid_: Dependency, rule
 
 **Current choice**:
