@@ -6,8 +6,8 @@ import { Thumb } from './ui'
 import { confirmAsync } from './telegram'
 
 const BRACKETS: Bracket[] = ['U15', 'U18', 'O18']
-type Tab = 'camp' | 'activities' | 'offerings' | 'participants'
-const TABS: [Tab, string][] = [['camp', 'Obóz'], ['activities', 'Aktywności'], ['offerings', 'Oferty'], ['participants', 'Uczestnicy']]
+type Tab = 'camp' | 'activities' | 'participants'
+const TABS: [Tab, string][] = [['camp', 'Obóz'], ['activities', 'Aktywności'], ['participants', 'Uczestnicy']]
 
 export function Admin({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('camp')
@@ -34,8 +34,7 @@ export function Admin({ onClose }: { onClose: () => void }) {
       </div>
       {tab === 'camp' && <CampForm camp={camp} onSaved={setCamp} />}
       {tab === 'camp' && camp && <CloseCamp onClosed={() => location.reload()} />}
-      {tab === 'activities' && <Activities activities={activities} reload={reloadActivities} />}
-      {tab === 'offerings' && (camp ? <Offerings camp={camp} activities={activities} /> : <p className="pad muted">Najpierw ustaw obóz.</p>)}
+      {tab === 'activities' && <Activities camp={camp} activities={activities} reload={reloadActivities} />}
       {tab === 'participants' && <Participants />}
     </div>
   )
@@ -105,22 +104,50 @@ function CloseCamp({ onClosed }: { onClosed: () => void }) {
   )
 }
 
-// ---------------- activities
-function Activities({ activities, reload }: { activities: Activity[]; reload: () => Promise<void> }) {
+// ---------------- activities + their offerings ("terminy") in one form
+type Slot = Omit<OfferingInput, 'activityId'> & { id?: number } // one offering of the activity, being edited
+
+const emptySlot = (): Slot => ({ dayIds: [], gender: null, brackets: null, capacity: null, highDemand: false })
+
+function slotText(camp: Camp, o: Slot) {
+  const nos = o.dayIds.map((id) => camp.days.find((d) => d.id === id)?.dayNo).filter(Boolean)
+  return [
+    nos.length ? `dzień ${nos.join(', ')}` : 'bez dni',
+    o.gender === 'K' ? 'tylko dziewczyny' : o.gender === 'M' ? 'tylko chłopcy' : '',
+    o.brackets?.join('/') ?? '',
+    o.capacity ? `max ${o.capacity}` : 'bez limitu',
+    o.highDemand ? '🔥' : '',
+  ].filter(Boolean).join(' · ')
+}
+
+function Activities({ camp, activities, reload }: { camp: Camp | null; activities: Activity[]; reload: () => Promise<void> }) {
   const [editing, setEditing] = useState<number | 'new' | null>(null)
+  const [offerings, setOfferings] = useState<OfferingDto[]>([])
+  const reloadOfferings = useCallback(() => api<OfferingDto[]>('/admin/offerings').then(setOfferings), [])
+  useEffect(() => void reloadOfferings(), [reloadOfferings])
+  const done = () => { setEditing(null); void reload(); void reloadOfferings() }
+  const of = (activityId: number) => offerings.filter((o) => o.activityId === activityId)
+  // Activities used in this camp first; the rest is the library from earlier camps.
+  const sorted = [...activities].sort((a, b) => Number(of(b.id).length > 0) - Number(of(a.id).length > 0))
+
   return (
     <>
+      {!camp && <p className="pad small muted" style={{ margin: 0 }}>Terminy dodasz po ustawieniu obozu (zakładka Obóz).</p>}
       <div className="pad"><button className="btn" onClick={() => setEditing('new')}>+ Nowa aktywność</button></div>
-      {editing === 'new' && <ActivityForm onDone={() => { setEditing(null); void reload() }} />}
-      {activities.map((a) =>
+      {editing === 'new' && <ActivityForm camp={camp} offerings={[]} onDone={done} />}
+      {sorted.map((a) =>
         editing === a.id ? (
-          <ActivityForm key={a.id} activity={a} onDone={() => { setEditing(null); void reload() }} />
+          <ActivityForm key={a.id} camp={camp} activity={a} offerings={of(a.id)} onDone={done} />
         ) : (
-          <div key={a.id} className="card pad row" onClick={() => setEditing(a.id)} style={{ cursor: 'pointer' }}>
+          <div key={a.id} className="card pad row" onClick={() => setEditing(a.id)} style={{ cursor: 'pointer', alignItems: 'flex-start', opacity: of(a.id).length ? 1 : 0.55 }}>
             <Thumb activity={a} size={56} />
             <div style={{ minWidth: 0 }}>
               <div className="b">{a.name}</div>
-              <div className="small muted ellipsis">{a.description || '—'}</div>
+              {camp && of(a.id).length ? (
+                of(a.id).map((o) => <div key={o.id} className="small muted">{slotText(camp, o)}</div>)
+              ) : (
+                <div className="small muted">nie ma w tym obozie – dotknij, żeby dodać termin</div>
+              )}
             </div>
           </div>
         ),
@@ -129,16 +156,24 @@ function Activities({ activities, reload }: { activities: Activity[]; reload: ()
   )
 }
 
-function ActivityForm({ activity, onDone }: { activity?: Activity; onDone: () => void }) {
+function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null; activity?: Activity; offerings: OfferingDto[]; onDone: () => void }) {
   const [name, setName] = useState(activity?.name ?? '')
   const [description, setDescription] = useState(activity?.description ?? '')
   const [logo, setLogo] = useState<File | null>(null) // picked but not uploaded yet
-  const [logoUrl, setLogoUrl] = useState(activity?.logoUrl ?? null)
   const [removeLogo, setRemoveLogo] = useState(false)
+  const [slots, setSlots] = useState<Slot[]>(() => (offerings.length ? offerings.map(({ activityId: _, ...o }) => o) : camp ? [emptySlot()] : []))
   const [busy, setBusy] = useState(false)
-  const preview = logo ? URL.createObjectURL(logo) : removeLogo ? null : logoUrl
+  const [error, setError] = useState<string | null>(null)
+  const preview = logo ? URL.createObjectURL(logo) : removeLogo ? null : (activity?.logoUrl ?? null)
+
+  const setSlot = (i: number, patch: Partial<Slot>) => setSlots((ss) => ss.map((x, j) => (j === i ? { ...x, ...patch } : x)))
 
   async function save() {
+    setError(null)
+    const valid = slots.filter((x) => x.dayIds.length)
+    if (slots.length !== valid.length) return setError('Każdy termin musi mieć przynajmniej jeden dzień (albo go usuń).')
+    const removed = offerings.filter((o) => !slots.some((x) => x.id === o.id))
+    if (removed.length && !(await confirmAsync(`Usunąć ${removed.length === 1 ? 'termin' : `${removed.length} terminy`}? Wybory uczestników na ${removed.length === 1 ? 'niego' : 'nie'} też znikną.`))) return
     setBusy(true)
     try {
       let id = activity?.id
@@ -149,13 +184,21 @@ function ActivityForm({ activity, onDone }: { activity?: Activity; onDone: () =>
         fd.append('file', logo)
         await api(`/admin/activities/${id}/logo`, { method: 'PUT', body: fd })
       } else if (removeLogo) await api(`/admin/activities/${id}/logo`, { method: 'DELETE' })
+      for (const o of removed) await api(`/admin/offerings/${o.id}`, { method: 'DELETE' })
+      for (const { id: oid, ...slot } of slots) {
+        const body: OfferingInput = { ...slot, activityId: id }
+        if (oid) await api(`/admin/offerings/${oid}`, { method: 'PUT', body })
+        else await api('/admin/offerings', { method: 'POST', body })
+      }
       onDone()
+    } catch (e) {
+      setError(String(e))
     } finally {
       setBusy(false)
     }
   }
   async function remove() {
-    if (!activity || !(await confirmAsync(`Usunąć „${activity.name}” razem z jej ofertami i wyborami?`))) return
+    if (!activity || !(await confirmAsync(`Usunąć „${activity.name}” razem z terminami i wyborami?`))) return
     await api(`/admin/activities/${activity.id}`, { method: 'DELETE' })
     onDone()
   }
@@ -169,13 +212,25 @@ function ActivityForm({ activity, onDone }: { activity?: Activity; onDone: () =>
         </label>
         <div style={{ flex: 1, display: 'grid', gap: 10 }}>
           <label>Nazwa<input className="input" value={name} onChange={(e) => setName(e.target.value)} /></label>
-          {preview && (
-            <button className="small danger" style={{ justifySelf: 'start' }} onClick={() => { setLogo(null); setRemoveLogo(true); setLogoUrl(null) }}>usuń logo</button>
-          )}
+          {preview && <button className="small danger" style={{ justifySelf: 'start' }} onClick={() => { setLogo(null); setRemoveLogo(true) }}>usuń logo</button>}
         </div>
       </div>
       <label>Krótki opis<textarea className="input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} /></label>
-      <div className="small muted">Logo: kwadratowy obrazek (PNG/JPG, do 5 MB), np. ikona jak w aplikacji wydarzenia.</div>
+
+      <div className="h3" style={{ margin: '6px 0 0' }}>Terminy</div>
+      {!camp ? (
+        <div className="small muted">Najpierw ustaw obóz (zakładka Obóz), wtedy dodasz dni.</div>
+      ) : (
+        <>
+          <div className="small muted">Kiedy i dla kogo. Kilka dni w jednym terminie = aktywność wielodniowa.</div>
+          {slots.map((slot, i) => (
+            <SlotEditor key={slot.id ?? `new-${i}`} camp={camp} slot={slot} onChange={(p) => setSlot(i, p)} onRemove={() => setSlots((ss) => ss.filter((_, j) => j !== i))} />
+          ))}
+          <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => setSlots((ss) => [...ss, emptySlot()])}>+ Dodaj termin</button>
+        </>
+      )}
+
+      {error && <div className="small" style={{ color: 'var(--danger)' }}>{error}</div>}
       <div className="row">
         <button className="btn" onClick={save} disabled={!name.trim() || busy}>{busy ? 'Zapisuję…' : 'Zapisz'}</button>
         <button className="btn ghost" onClick={onDone}>Anuluj</button>
@@ -186,113 +241,38 @@ function ActivityForm({ activity, onDone }: { activity?: Activity; onDone: () =>
   )
 }
 
-// ---------------- offerings
-const emptyOffering = (activityId: number): OfferingInput => ({ activityId, dayIds: [], gender: null, brackets: null, capacity: null, highDemand: false })
-
-function Offerings({ camp, activities }: { camp: Camp; activities: Activity[] }) {
-  const [offerings, setOfferings] = useState<OfferingDto[]>([])
-  const [editing, setEditing] = useState<number | 'new' | null>(null)
-  const reload = useCallback(() => api<OfferingDto[]>('/admin/offerings').then(setOfferings), [])
-  useEffect(() => void reload(), [reload])
-  const actName = (id: number) => activities.find((a) => a.id === id)?.name ?? '?'
-  const dayNo = (id: number) => camp.days.find((d) => d.id === id)?.dayNo
-  const done = () => { setEditing(null); void reload() }
-
-  if (!activities.length) return <p className="pad muted">Najpierw dodaj aktywności.</p>
-  return (
-    <>
-      <div className="pad"><button className="btn" onClick={() => setEditing('new')}>+ Nowa oferta</button></div>
-      {editing === 'new' && <OfferingForm camp={camp} activities={activities} initial={emptyOffering(activities[0]!.id)} onDone={done} />}
-      {camp.days.map((d) => {
-        const list = offerings.filter((o) => o.dayIds[0] === d.id)
-        if (!list.length) return null
-        return (
-          <div key={d.id}>
-            <div className="h3">Zaczyna się w dniu {d.dayNo}</div>
-            {list.map((o) =>
-              editing === o.id ? (
-                <OfferingForm key={o.id} camp={camp} activities={activities} initial={o} id={o.id} onDone={done} />
-              ) : (
-                <div key={o.id} className="card pad" onClick={() => setEditing(o.id)} style={{ cursor: 'pointer' }}>
-                  <div className="b">{actName(o.activityId)} {o.highDemand && '🔥'}</div>
-                  <div className="small muted">
-                    {[
-                      'dni ' + o.dayIds.map(dayNo).join(', '),
-                      o.gender === 'K' ? 'tylko dziewczyny' : o.gender === 'M' ? 'tylko chłopcy' : '',
-                      o.brackets?.join('/') ?? '',
-                      o.capacity ? `max ${o.capacity}` : 'bez limitu',
-                    ].filter(Boolean).join(' · ')}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-        )
-      })}
-    </>
-  )
-}
-
-function OfferingForm({ camp, activities, initial, id, onDone }: { camp: Camp; activities: Activity[]; initial: OfferingInput; id?: number; onDone: () => void }) {
-  const [f, setF] = useState<OfferingInput>(initial)
-  const [error, setError] = useState<string | null>(null)
-  const toggleDay = (d: number) => setF({ ...f, dayIds: f.dayIds.includes(d) ? f.dayIds.filter((x) => x !== d) : [...f.dayIds, d] })
+function SlotEditor({ camp, slot, onChange, onRemove }: { camp: Camp; slot: Slot; onChange: (p: Partial<Slot>) => void; onRemove: () => void }) {
+  const toggleDay = (d: number) => onChange({ dayIds: slot.dayIds.includes(d) ? slot.dayIds.filter((x) => x !== d) : [...slot.dayIds, d] })
   const toggleBracket = (b: Bracket) => {
-    const cur = f.brackets ?? []
+    const cur = slot.brackets ?? BRACKETS
     const next = cur.includes(b) ? cur.filter((x) => x !== b) : [...cur, b]
-    setF({ ...f, brackets: next.length === 0 || next.length === BRACKETS.length ? null : next })
+    onChange({ brackets: next.length === 0 || next.length === BRACKETS.length ? null : next })
   }
-
-  async function save() {
-    setError(null)
-    try {
-      if (id) await api(`/admin/offerings/${id}`, { method: 'PUT', body: f })
-      else await api('/admin/offerings', { method: 'POST', body: f })
-      onDone()
-    } catch (e) {
-      setError(String(e))
-    }
-  }
-  async function remove() {
-    if (!id || !(await confirmAsync('Usunąć ofertę razem z wyborami uczestników?'))) return
-    await api(`/admin/offerings/${id}`, { method: 'DELETE' })
-    onDone()
-  }
-
   return (
-    <div className="card pad form">
-      <label>Aktywność
-        <select className="input" value={f.activityId} onChange={(e) => setF({ ...f, activityId: Number(e.target.value) })}>
-          {activities.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-      </label>
-      <div>
-        <div className="small muted">Dni (kilka = aktywność wielodniowa)</div>
-        <div className="row" style={{ flexWrap: 'wrap', marginTop: 4 }}>
-          {camp.days.map((d) => <button key={d.id} className={`chip ${f.dayIds.includes(d.id) ? 'on' : ''}`} onClick={() => toggleDay(d.id)}>Dzień {d.dayNo}</button>)}
-        </div>
-      </div>
-      <div>
-        <div className="small muted">Dla kogo</div>
-        <div className="row" style={{ marginTop: 4 }}>
-          {([[null, 'Wszyscy'], ['M', 'Chłopcy'], ['K', 'Dziewczyny']] as [Gender | null, string][]).map(([g, l]) => (
-            <button key={l} className={`chip ${f.gender === g ? 'on' : ''}`} onClick={() => setF({ ...f, gender: g })}>{l}</button>
-          ))}
-        </div>
-        <div className="row" style={{ marginTop: 6 }}>
-          {BRACKETS.map((b) => <button key={b} className={`chip ${!f.brackets || f.brackets.includes(b) ? 'on' : ''}`} onClick={() => toggleBracket(b)}>{b}</button>)}
-        </div>
-      </div>
-      <label>Limit miejsc (puste = bez limitu)
-        <input className="input" type="number" min={1} value={f.capacity ?? ''} onChange={(e) => setF({ ...f, capacity: e.target.value ? Number(e.target.value) : null })} />
-      </label>
-      <label className="row"><input type="checkbox" checked={f.highDemand} onChange={(e) => setF({ ...f, highDemand: e.target.checked })} /> 🔥 Duże zainteresowanie</label>
-      {error && <div className="small" style={{ color: 'var(--danger)' }}>{error}</div>}
+    <div className="slot">
       <div className="row">
-        <button className="btn" onClick={save} disabled={!f.dayIds.length}>Zapisz</button>
-        <button className="btn ghost" onClick={onDone}>Anuluj</button>
+        <span className="small muted">Dni</span>
         <span className="sp" />
-        {id && <button className="btn ghost danger" onClick={remove}>Usuń</button>}
+        <button className="small danger" onClick={onRemove}>usuń termin</button>
+      </div>
+      <div className="row" style={{ flexWrap: 'wrap' }}>
+        {camp.days.map((d) => <button key={d.id} className={`chip ${slot.dayIds.includes(d.id) ? 'on' : ''}`} onClick={() => toggleDay(d.id)}>Dzień {d.dayNo}</button>)}
+      </div>
+      <div className="small muted">Dla kogo</div>
+      <div className="row" style={{ flexWrap: 'wrap' }}>
+        {([[null, 'Wszyscy'], ['M', 'Chłopcy'], ['K', 'Dziewczyny']] as [Gender | null, string][]).map(([g, l]) => (
+          <button key={l} className={`chip ${slot.gender === g ? 'on' : ''}`} onClick={() => onChange({ gender: g })}>{l}</button>
+        ))}
+        <span style={{ width: 6 }} />
+        {BRACKETS.map((b) => <button key={b} className={`chip ${!slot.brackets || slot.brackets.includes(b) ? 'on' : ''}`} onClick={() => toggleBracket(b)}>{b}</button>)}
+      </div>
+      <div className="row">
+        <label style={{ flex: 1 }}>Limit miejsc
+          <input className="input" type="number" min={1} placeholder="bez limitu" value={slot.capacity ?? ''} onChange={(e) => onChange({ capacity: e.target.value ? Number(e.target.value) : null })} />
+        </label>
+        <label className="row" style={{ paddingTop: 18 }}>
+          <input type="checkbox" checked={slot.highDemand} onChange={(e) => onChange({ highDemand: e.target.checked })} /> 🔥 duże zainteresowanie
+        </label>
       </div>
     </div>
   )

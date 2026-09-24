@@ -105,8 +105,7 @@ Link do aplikacji to: **`https://t.me/<username_bota>?startapp`**, np. `https://
 1. Otwórz link z kroku 10 na telefonie. Wybierz płeć i grupę wiekową.
 2. Kliknij ⚙️ (panel organizatora):
    - **Obóz:** nazwa `Nyttårs camp 2026`, liczba dni i daty (28.12–1.01), daty startu (i opcjonalnie końca) zapisów dla U15/U18/O18. Kliknij Zapisz.
-   - **Aktywności:** dodaj każdą z nazwą, krótkim opisem i logo (jeden kwadratowy obrazek).
-   - **Oferty:** dla każdej aktywności wskaż, w które dni jest dostępna, dla kogo (chłopcy/dziewczyny, U15/U18/O18), limit miejsc i 🔥, jeśli jest na nią duże zainteresowanie. Kilka dni w jednej ofercie oznacza aktywność wielodniową.
+   - **Aktywności:** dla każdej na jednym ekranie wpisz nazwę, krótki opis, logo (jeden kwadratowy obrazek) i **terminy**: w które dni, dla kogo (chłopcy/dziewczyny, U15/U18/O18), limit miejsc i 🔥 przy dużym zainteresowaniu. Kilka dni w jednym terminie oznacza aktywność wielodniową. Kilka terminów to np. „dzień 1 dziewczyny, dzień 2 chłopcy”.
 3. Sprawdź dzień lub dwa jako uczestnik: dodaj coś do rankingu, przeciągnij, ustaw warunek.
 
 ## 12. Test z jedną osobą, potem ogłoszenie

@@ -146,3 +146,4 @@ input, textarea, select { font: inherit; color: inherit; }
 .logo-pick { width: 88px; height: 88px; border-radius: 16px; background: var(--chip); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; flex: none; color: var(--muted) !important; font-size: 13px !important; }
 .logo-pick img { width: 100%; height: 100%; object-fit: cover; }
 img.thumb { object-fit: cover; }
+.slot { display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: var(--card-2); }
