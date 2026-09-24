@@ -15,9 +15,9 @@ const sql = []
 for (const t of ['day_status', 'pick_rank', 'pick', 'participant', 'offering_day', 'offering', 'wave', 'camp_day', 'camp', 'activity_photo', 'activity'])
   sql.push(`DELETE FROM ${t};`)
 
-sql.push(`INSERT INTO camp (id, name) VALUES (1, 'Obóz Młodzieżowy 2026');`)
+sql.push(`INSERT INTO camp (id, name) VALUES (1, 'Nyttårs camp 2026');`)
 const DAYS = [1, 2, 3, 4]
-DAYS.forEach((d) => sql.push(`INSERT INTO camp_day (id, camp_id, day_no, date) VALUES (${d}, 1, ${d}, '2027-07-${11 + d}');`))
+DAYS.forEach((d) => sql.push(`INSERT INTO camp_day (id, camp_id, day_no, date) VALUES (${d}, 1, ${d}, '2026-12-${27 + d}');`))
 for (const [b, dt] of [['U15', '2026-10-01'], ['U18', '2026-10-08'], ['O18', '2026-10-15']]) sql.push(`INSERT INTO wave VALUES (1, '${b}', '${dt}');`)
 
 const ACTS = [
