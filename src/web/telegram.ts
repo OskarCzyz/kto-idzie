@@ -4,6 +4,9 @@ interface TelegramWebApp {
   ready(): void
   expand(): void
   disableVerticalSwipes?(): void
+  setHeaderColor?(color: string): void
+  setBackgroundColor?(color: string): void
+  setBottomBarColor?(color: string): void
   showConfirm?(message: string, callback: (ok: boolean) => void): void
   HapticFeedback?: { selectionChanged(): void }
 }
@@ -20,6 +23,10 @@ export function initTelegram() {
   tg.ready()
   tg.expand()
   tg.disableVerticalSwipes?.() // otherwise dragging in the ranking closes the Mini App
+  // Fixed dark theme (see styles.css), so Telegram's chrome should match it.
+  tg.setHeaderColor?.('#18191c')
+  tg.setBackgroundColor?.('#18191c')
+  tg.setBottomBarColor?.('#18191c')
 }
 
 /** Telegram's native confirm when available, browser confirm otherwise. */

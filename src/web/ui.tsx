@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import type { Activity, PersonDto } from '../shared/api'
 
-const HUES = ['#e17076', '#7bc862', '#65aadd', '#a695e7', '#ee7aae', '#6ec9cb', '#faa774', '#5a8fbb']
+const HUES = ['#c9716f', '#6fae7a', '#5d93c4', '#9a87d6', '#c872a0', '#5faeab', '#d19a62', '#6d8fb0']
+// Dark tiles with a light accent, like the category tiles in the BCC event app.
+const TILES: [string, string][] = [['#1f3a26', '#9fd6a3'], ['#4a1a2e', '#f0a3c0'], ['#16306b', '#f6e7c9'], ['#123b3a', '#8fd1c6'], ['#3a2450', '#cdb6f5'], ['#43301a', '#f0c98a']]
 
 export function Avatar({ person, me, size = 24 }: { person: PersonDto; me?: boolean; size?: number }) {
   const style = { width: size, height: size, fontSize: size * 0.42, background: HUES[person.id % HUES.length] }
@@ -17,7 +19,7 @@ export function Thumb({ activity, size = 44 }: { activity: Activity; size?: numb
   const photo = activity.photos[0]
   if (photo) return <img src={photo.url} className="thumb" style={{ width: size, height: size }} alt="" />
   return (
-    <span className="thumb" style={{ width: size, height: size, background: HUES[activity.id % HUES.length], color: '#fff', fontWeight: 700, fontSize: size * 0.4 }}>
+    <span className="thumb" style={{ width: size, height: size, background: TILES[activity.id % TILES.length]![0], color: TILES[activity.id % TILES.length]![1], fontFamily: 'var(--serif)', fontWeight: 700, fontSize: size * 0.45 }}>
       {activity.name.slice(0, 1)}
     </span>
   )

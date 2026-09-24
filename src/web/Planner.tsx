@@ -50,7 +50,7 @@ export function Planner({ me, onAdmin }: { me: Me; onAdmin?: () => void }) {
   return (
     <div className="page">
       <div className="topbar row">
-        <b className="ellipsis">{view.state.camp.name}</b>
+        <span className="brand ellipsis">{view.state.camp.name}</span>
         <span className="sp" />
         {toWave != null && <span className="wave">⏰ {toWave > 0 ? `${toWave} dni do zapisów` : toWave === 0 ? 'zapisy dziś!' : 'zapisy trwają'}</span>}
         {onAdmin && <button className="chip" onClick={onAdmin} aria-label="Panel organizatora">⚙️</button>}
