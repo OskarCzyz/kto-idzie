@@ -49,5 +49,5 @@ migrations/      D1 SQL migrations
 | 06 ✅ | [Ranking editing: add/remove, drag & drop, conditions, status, conflicts](issues/06-ranking-editing.md) | 05 |
 | 07 ✅ | [Offering / person sheets, plan summary, wave countdown](issues/07-sheets-summary.md) | 05 |
 | 08 ✅ (no change highlight yet) | [Live refresh + optimistic updates](issues/08-live.md) | 06 |
-| 09 | [Camp lifecycle: close camp, copy activities](issues/09-lifecycle.md) | 04 |
+| 09 ✅ | [Camp lifecycle: close camp, copy activities](issues/09-lifecycle.md) | 04 |
 | 10 | [Deploy + BotFather setup (human steps)](issues/10-deploy.md) | 01, 03 |

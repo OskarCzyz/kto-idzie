@@ -32,6 +32,7 @@ export function Admin({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       {tab === 'camp' && <CampForm camp={camp} onSaved={setCamp} />}
+      {tab === 'camp' && camp && <CloseCamp onClosed={() => location.reload()} />}
       {tab === 'activities' && <Activities activities={activities} reload={reloadActivities} />}
       {tab === 'offerings' && (camp ? <Offerings camp={camp} activities={activities} /> : <p className="pad muted">Najpierw ustaw obóz.</p>)}
       {tab === 'participants' && <Participants />}
@@ -77,6 +78,21 @@ function CampForm({ camp, onSaved }: { camp: Camp | null; onSaved: (c: Camp) => 
         </label>
       ))}
       <button className="btn" onClick={save} disabled={!form.name.trim()}>{saved ? '✓ Zapisano' : 'Zapisz'}</button>
+    </div>
+  )
+}
+
+function CloseCamp({ onClosed }: { onClosed: () => void }) {
+  async function close() {
+    if (!(await confirmAsync('Zakończyć obóz? Usunie to oferty, wszystkie wybory i uczestników (poza organizatorami). Aktywności ze zdjęciami zostaną na następny obóz.'))) return
+    await api('/admin/camp/close', { method: 'POST' })
+    onClosed()
+  }
+  return (
+    <div className="card pad">
+      <div className="b">Koniec obozu</div>
+      <div className="small muted" style={{ margin: '4px 0 8px' }}>Gdy wszyscy są już zapisani. Aktywności zostają, żeby użyć ich przy kolejnym obozie.</div>
+      <button className="btn ghost danger" onClick={close}>Zakończ obóz</button>
     </div>
   )
 }

@@ -42,6 +42,23 @@ admin.put('/camp', async (c) => {
   return c.json(camp)
 })
 
+/**
+ * Ends the camp: deletes it with its days, waves, offerings, picks and statuses (cascade), and all
+ * non-organizer participants. Activities and photos stay for the next camp. Organizers stay but must
+ * pick their age bracket again.
+ */
+admin.post('/camp/close', async (c) => {
+  const db = c.env.DB
+  const camp = await activeCamp(db)
+  if (!camp) return bad('no-camp')
+  await db.batch([
+    db.prepare('DELETE FROM camp WHERE id = ?1').bind(camp.id),
+    db.prepare('DELETE FROM participant WHERE is_organizer = 0'),
+    db.prepare('UPDATE participant SET bracket = NULL'),
+  ])
+  return c.json({ ok: true })
+})
+
 // ---------- activities (library, outlives a camp)
 admin.get('/activities', async (c) => c.json(await listActivities(c.env.DB)))
 
