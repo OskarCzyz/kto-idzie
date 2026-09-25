@@ -9,7 +9,7 @@ export function Summary({ view, goToDay }: { view: View; goToDay: (index: number
     <>
       <h2 className="q" style={{ paddingTop: 14 }}>Twój plan</h2>
       <div className="card pad">
-        <div className="small muted" style={{ marginBottom: 6 }}>Zapisy w aplikacji wydarzenia</div>
+        <div className="small muted" style={{ marginBottom: 6 }}>Zapisy w aplikacji „Event”</div>
         {(['U15', 'U18', 'O18'] as Bracket[]).map((b) => (
           <div key={b} className="row small" style={{ padding: '3px 0', fontWeight: b === view.me.bracket ? 700 : 400 }}>
             <span style={{ width: 40 }}>{b}</span>

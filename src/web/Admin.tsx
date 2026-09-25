@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Activity, Camp, CampInput, OfferingDto, OfferingInput, ParticipantDto } from '../shared/api'
+import { CATEGORIES, type Activity, type Camp, type CampInput, type Category, type OfferingDto, type OfferingInput, type ParticipantDto } from '../shared/api'
 import type { Bracket, Gender, SignupGroup } from '../domain'
 import { api } from './api'
 import { Thumb } from './ui'
@@ -180,7 +180,7 @@ function Activities({ camp, activities, reload }: { camp: Camp | null; activitie
           <div key={a.id} className="card pad row" onClick={() => setEditing(a.id)} style={{ cursor: 'pointer', alignItems: 'flex-start', opacity: of(a.id).length ? 1 : 0.55 }}>
             <Thumb activity={a} size={56} />
             <div style={{ minWidth: 0 }}>
-              <div className="b">{a.name}</div>
+              <div className="b">{a.name} <span className="badge">{a.category ?? '⚠️ brak kategorii'}</span></div>
               {camp && of(a.id).length ? (
                 toSlots(of(a.id)).map((s) => <div key={s.ids[0]} className="small muted">{slotText(camp, s)}</div>)
               ) : (
@@ -196,6 +196,7 @@ function Activities({ camp, activities, reload }: { camp: Camp | null; activitie
 
 function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null; activity?: Activity; offerings: OfferingDto[]; onDone: () => void }) {
   const [name, setName] = useState(activity?.name ?? '')
+  const [category, setCategory] = useState<Category | null>(activity?.category ?? null)
   const [logo, setLogo] = useState<File | null>(null) // picked but not uploaded yet
   const [removeLogo, setRemoveLogo] = useState(false)
   const [slots, setSlots] = useState<Slot[]>(() => (offerings.length ? toSlots(offerings) : camp ? [emptySlot(camp)] : []))
@@ -217,8 +218,8 @@ function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null
     setBusy(true)
     try {
       let id = activity?.id
-      if (id) await api(`/admin/activities/${id}`, { method: 'PUT', body: { name } })
-      else id = (await api<{ id: number }>('/admin/activities', { method: 'POST', body: { name } })).id
+      if (id) await api(`/admin/activities/${id}`, { method: 'PUT', body: { name, category } })
+      else id = (await api<{ id: number }>('/admin/activities', { method: 'POST', body: { name, category } })).id
       if (logo) {
         const fd = new FormData()
         fd.append('file', logo)
@@ -254,6 +255,10 @@ function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null
         </label>
         <div style={{ flex: 1, display: 'grid', gap: 10 }}>
           <label>Nazwa<input className="input" value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <div className="small muted">Kategoria{!category && <span className="danger"> – wybierz</span>}</div>
+          <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            {CATEGORIES.map((k) => <button key={k} className={`chip ${category === k ? 'on' : ''}`} onClick={() => setCategory(k)}>{k}</button>)}
+          </div>
           {preview && <button className="small danger" style={{ justifySelf: 'start' }} onClick={() => { setLogo(null); setRemoveLogo(true) }}>usuń logo</button>}
         </div>
       </div>
@@ -273,7 +278,7 @@ function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null
 
       {error && <div className="small" style={{ color: 'var(--danger)' }}>{error}</div>}
       <div className="row">
-        <button className="btn" onClick={save} disabled={!name.trim() || busy}>{busy ? 'Zapisuję…' : 'Zapisz'}</button>
+        <button className="btn" onClick={save} disabled={!name.trim() || !category || busy}>{busy ? 'Zapisuję…' : 'Zapisz'}</button>
         <button className="btn ghost" onClick={onDone}>Anuluj</button>
         <span className="sp" />
         {activity && <button className="btn ghost danger" onClick={remove}>Usuń</button>}

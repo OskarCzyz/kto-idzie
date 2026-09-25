@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { addPick, isMentor, keepOnAllDays, openGroups, movePick, removePick, setDayStatus, setMentorRole, type MentorRole, type Plan } from '../domain'
 import { Coach } from './Coach'
 import { GoingWith } from './parts'
+import { CATEGORIES, type OfferingDto } from '../shared/api'
 import { Thumb, useChoice, type Choose } from './ui'
 import { GROUP_LABEL, capacityText, eligibilityText, g, planLetter, planState, type View } from './view'
 
@@ -16,6 +17,28 @@ export interface DayProps {
 }
 
 const TONE = { ok: 'var(--ok)', wait: 'var(--wait)', muted: 'var(--muted)' }
+
+type Sort = 'popular' | 'category' | 'needMentor'
+const SORT_KEY = 'day-sort'
+
+/** Remembered per browser; falls back to "popular" when storage is unavailable. "needMentor" is for mentors only. */
+function useSort(mentor: boolean): [Sort, (s: Sort) => void] {
+  const [sort, setSort] = useState<Sort>(() => {
+    try {
+      const s = localStorage.getItem(SORT_KEY)
+      return s === 'category' || (s === 'needMentor' && mentor) ? s : 'popular'
+    } catch {
+      return 'popular'
+    }
+  })
+  const set = (s: Sort) => {
+    setSort(s)
+    try {
+      localStorage.setItem(SORT_KEY, s)
+    } catch {}
+  }
+  return [sort, set]
+}
 
 type Step = { kind: 'pick' } | { kind: 'role'; oid: number } | { kind: 'who'; oid: number } | null
 
@@ -47,6 +70,7 @@ async function addPlan(view: View, oid: number, edit: DayProps['edit'], choose: 
 export function Day({ view, day, edit, openOffering, openCondition }: DayProps) {
   const [choiceSheet, choose] = useChoice()
   const [step, setStep] = useState<Step>(null)
+  const [sort, setSort] = useSort(isMentor(view.me))
   const me = view.me.id
   const ranking = view.myPlan.rankings[day] ?? []
   const options = view
@@ -55,6 +79,9 @@ export function Day({ view, day, edit, openOffering, openCondition }: DayProps) 
     .sort((a, b) => view.goers(b.id, day).length - view.goers(a.id, day).length)
   const active: Step = step ?? (ranking.length ? null : { kind: 'pick' })
   const mentor = isMentor(view.me)
+  const needMentor = options
+    .filter((o) => view.mentorGap(o.id, day).missing > 0)
+    .sort((a, b) => view.mentorGap(b.id, day).missing - view.mentorGap(a.id, day).missing)
   const bothRoles = (oid: number) => openGroups(view.me, view.domainOffering(oid)).length === 2
   const setRole = (oid: number, role: MentorRole) => edit((p) => setMentorRole(p, oid, role))
 
@@ -76,7 +103,7 @@ export function Day({ view, day, edit, openOffering, openCondition }: DayProps) 
       <div className="qbox" data-coach="question">
         <Thumb activity={a} size={72} />
         <div className="qbig">{a.name} – bierzesz udział jako mentor?</div>
-        <div className="small muted">Każda grupa ma w aplikacji wydarzenia osobny limit miejsc.</div>
+        <div className="small muted">Każda grupa ma w aplikacji „Event” osobny limit miejsc.</div>
         <div style={{ display: 'grid', gap: 8, marginTop: 14, width: '100%' }}>
           <button className="btn" onClick={() => pick('in')}>Tak – mentor uczestniczący</button>
           <button className="btn ghost" onClick={() => pick('out')}>Nie – mentor nieuczestniczący</button>
@@ -108,16 +135,34 @@ export function Day({ view, day, edit, openOffering, openCondition }: DayProps) 
           <div className="small muted">Dzień {view.dayNo(day)}{prev && ` · Plan ${planLetter(ranking.length)}`}</div>
           <div className="qbig">{prev ? `A gdyby ${prev} nie wyszło?` : 'Na co chcesz iść?'}</div>
         </div>
-        <div className="tiles">
-          {options.map((o) => (
-            <button key={o.id} className="tile" onClick={async () => { if (await addPlan(view, o.id, edit, choose)) setStep({ kind: mentor && bothRoles(o.id) ? 'role' : 'who', oid: o.id }) }}>
-              <Thumb activity={view.activityOf(o.id)} size={64} />
-              <span className="b">{view.activityOf(o.id).name}</span>
-              <span className="small muted">{[view.daysText(o), eligibilityText(o), capacityText(o.capacity, openGroups(view.me, view.domainOffering(o.id))), o.highDemand ? '🔥' : ''].filter(Boolean).join(' · ')}</span>
-              <GoingWith view={view} oid={o.id} day={day} />
-            </button>
-          ))}
-        </div>
+        {options.length > 1 && (
+          <div className="chips">
+            <button className={`chip ${sort === 'popular' ? 'on' : ''}`} onClick={() => setSort('popular')}>Najpopularniejsze</button>
+            <button className={`chip ${sort === 'category' ? 'on' : ''}`} onClick={() => setSort('category')}>Według kategorii</button>
+            {mentor && <button className={`chip ${sort === 'needMentor' ? 'on' : ''}`} onClick={() => setSort('needMentor')}>Mentee bez mentora</button>}
+          </div>
+        )}
+        {sort === 'needMentor' && (
+          <div className="small muted" style={{ textAlign: 'center', padding: '0 16px' }}>
+            {needMentor.length ? 'Tu idą mentee, a mentorów jest mniej niż 1 na 3 osoby.' : 'Wszędzie, gdzie idą mentee, jest już co najmniej 1 mentor na 3 osoby.'}
+          </div>
+        )}
+        {(sort === 'category' ? byCategory(view, options) : [{ name: null, items: sort === 'needMentor' ? needMentor : options }]).map(({ name, items }) => (
+          <div key={name ?? 'all'}>
+            {name && <div className="h3" style={{ margin: '14px 16px 0' }}>{name}</div>}
+            <div className="tiles">
+              {items.map((o) => (
+                <button key={o.id} className="tile" onClick={async () => { if (await addPlan(view, o.id, edit, choose)) setStep({ kind: mentor && bothRoles(o.id) ? 'role' : 'who', oid: o.id }) }}>
+                  <Thumb activity={view.activityOf(o.id)} size={64} />
+                  <span className="b">{view.activityOf(o.id).name}</span>
+                  <span className="small muted">{[view.daysText(o), eligibilityText(o), capacityText(o.capacity, openGroups(view.me, view.domainOffering(o.id))), o.highDemand ? '🔥' : ''].filter(Boolean).join(' · ')}</span>
+                  <GoingWith view={view} oid={o.id} day={day} />
+                  {sort === 'needMentor' && <MentorGap view={view} oid={o.id} day={day} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
         {!options.length && <div className="card pad small muted">Nie ma więcej aktywności na ten dzień.</div>}
         {ranking.length > 0 && (
           <div className="pad">
@@ -173,6 +218,24 @@ export function Day({ view, day, edit, openOffering, openCondition }: DayProps) 
   )
 }
 
+const mentorsWord = (n: number) =>
+  n === 1 ? 'mentor' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'mentorzy' : 'mentorów'
+
+function MentorGap({ view, oid, day }: { view: View; oid: number; day: number }) {
+  const { mentees, mentors, missing } = view.mentorGap(oid, day)
+  return (
+    <span className="small" style={{ color: 'var(--wait)' }}>
+      {mentees} mentee · {mentors} {mentorsWord(mentors)} · brakuje {missing}
+    </span>
+  )
+}
+
+/** Options grouped in the fixed category order, most popular first within a group; uncategorized last. */
+function byCategory(view: View, options: OfferingDto[]): { name: string; items: OfferingDto[] }[] {
+  const groups = [...CATEGORIES, null].map((c) => ({ name: c ?? 'Inne', items: options.filter((o) => view.activityOf(o.id).category === c) }))
+  return groups.filter((g) => g.items.length)
+}
+
 function NowCard({ view, day, edit }: { view: View; day: number; edit: DayProps['edit'] }) {
   const me = view.me.id
   const current = view.res.currentChoice(me, day)
@@ -198,7 +261,7 @@ function NowCard({ view, day, edit }: { view: View; day: number; edit: DayProps[
           </div>
           <button className={`reg ${registered ? 'on' : ''}`} onClick={() => toggle(current)}>
             <span className="box">{registered ? '✓' : ''}</span>
-            {g(view.me.gender, 'Zapisałem', 'Zapisałam')} się w aplikacji wydarzenia
+            {g(view.me.gender, 'Zapisałem', 'Zapisałam')} się w aplikacji „Event”
           </button>
         </>
       ) : (

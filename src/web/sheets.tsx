@@ -20,6 +20,7 @@ export function OfferingSheet({ view, oid, day, onClose, openPerson }: { view: V
       </div>
       <div className="sec" style={{ textAlign: 'center' }}>
         <div className="b" style={{ fontSize: 19 }}>{a.name}</div>
+        {a.category && <div className="small" style={{ color: 'var(--teal)' }}>{a.category}</div>}
         <div className="small muted">{o.dayIds.map((x) => `Dzień ${view.dayNo(x)}`).join(', ')}{eligibilityText(o) && ` · ${eligibilityText(o)}`}</div>
         {o.highDemand && <span className="badge hot">🔥 duże zainteresowanie</span>}
         <div className="groups">

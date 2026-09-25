@@ -34,14 +34,19 @@ export interface CampInput {
   waveEnds: Partial<Record<Bracket, string>>
 }
 
+export const CATEGORIES = ['Camp Host', 'Kreatywne', 'Jedzenie', 'Gry', 'Media', 'Muzyka', 'Na Zewnątrz', 'Sport', 'Sporty Zimowe'] as const
+export type Category = (typeof CATEGORIES)[number]
+
 export interface Activity {
   id: number
   name: string
+  category: Category | null // null only for activities saved before categories existed
   logoUrl: string | null // one logo per activity, like the BCC app's activity tiles
 }
 
 export interface ActivityInput {
   name: string
+  category: Category
 }
 
 /** Places per signup group, across all youth groups at the camp; null = unlimited. */

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import type { ActivityInput, CampInput, OfferingInput, ParticipantPatch } from '../../shared/api'
+import { CATEGORIES, type ActivityInput, type CampInput, type OfferingInput, type ParticipantPatch } from '../../shared/api'
 import type { Bracket } from '../../domain'
 import { organizerOnly, type AppEnv, type ParticipantRow } from '../auth'
 import { activeCamp, listActivities, listOfferings, toParticipant } from '../db'
@@ -65,8 +65,9 @@ admin.get('/activities', async (c) => c.json(await listActivities(c.env.DB)))
 admin.post('/activities', async (c) => {
   const body = await c.req.json<ActivityInput>()
   if (!body.name?.trim()) return bad('name')
-  const row = await c.env.DB.prepare('INSERT INTO activity (name) VALUES (?1) RETURNING id')
-    .bind(body.name.trim())
+  if (!CATEGORIES.includes(body.category)) return bad('category')
+  const row = await c.env.DB.prepare('INSERT INTO activity (name, category) VALUES (?1, ?2) RETURNING id')
+    .bind(body.name.trim(), body.category)
     .first<{ id: number }>()
   return c.json({ id: row!.id })
 })
@@ -74,8 +75,9 @@ admin.post('/activities', async (c) => {
 admin.put('/activities/:id', async (c) => {
   const body = await c.req.json<ActivityInput>()
   if (!body.name?.trim()) return bad('name')
-  await c.env.DB.prepare('UPDATE activity SET name = ?1 WHERE id = ?2')
-    .bind(body.name.trim(), Number(c.req.param('id')))
+  if (!CATEGORIES.includes(body.category)) return bad('category')
+  await c.env.DB.prepare('UPDATE activity SET name = ?1, category = ?2 WHERE id = ?3')
+    .bind(body.name.trim(), body.category, Number(c.req.param('id')))
     .run()
   return c.json({ ok: true })
 })

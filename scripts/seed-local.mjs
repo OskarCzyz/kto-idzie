@@ -21,8 +21,12 @@ DAYS.forEach((d) => sql.push(`INSERT INTO camp_day (id, camp_id, day_no, date) V
 for (const [b, from, to] of [['U15', '2026-10-01', '2026-10-05'], ['U18', '2026-10-08', '2026-10-12'], ['O18', '2026-10-15', null]])
   sql.push(`INSERT INTO wave (camp_id, bracket, opens_at, closes_at) VALUES (1, '${b}', '${from}', ${q(to)});`)
 
-const ACTS = ['Kajaki', 'Wspinaczka', 'Piłka nożna', 'Siatkówka', 'Warsztaty plastyczne', 'Gotowanie', 'Rajd rowerowy', 'Teatr', 'Survival', 'Fotografia', 'Warsztaty muzyczne', 'Taniec', 'Łucznictwo']
-ACTS.forEach((n, i) => sql.push(`INSERT INTO activity (id, name) VALUES (${i + 1}, ${q(n)});`))
+const CATS = {
+  Kajaki: 'Na Zewnątrz', Wspinaczka: 'Sport', 'Piłka nożna': 'Sport', Siatkówka: 'Sport', 'Warsztaty plastyczne': 'Kreatywne', Gotowanie: 'Jedzenie',
+  'Rajd rowerowy': 'Na Zewnątrz', Teatr: 'Kreatywne', Survival: 'Na Zewnątrz', Fotografia: 'Media', 'Warsztaty muzyczne': 'Muzyka', Taniec: 'Muzyka', Łucznictwo: 'Sport',
+}
+const ACTS = Object.keys(CATS)
+ACTS.forEach((n, i) => sql.push(`INSERT INTO activity (id, name, category) VALUES (${i + 1}, ${q(n)}, ${q(CATS[n])});`))
 const act = (name) => ACTS.indexOf(name) + 1
 
 const OFF = []

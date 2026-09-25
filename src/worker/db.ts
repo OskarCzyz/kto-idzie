@@ -1,4 +1,4 @@
-import type { Activity, Camp, OfferingDto, ParticipantDto } from '../shared/api'
+import type { Activity, Camp, Category, OfferingDto, ParticipantDto } from '../shared/api'
 import type { Bracket, Gender } from '../domain'
 import type { ParticipantRow } from './auth'
 
@@ -24,11 +24,11 @@ export async function listActivities(db: D1Database): Promise<Activity[]> {
   // The logo lives in activity_photo; there is at most one row per activity (upload replaces it).
   const { results } = await db
     .prepare(
-      `SELECT a.id, a.name,
+      `SELECT a.id, a.name, a.category,
          (SELECT r2_key FROM activity_photo p WHERE p.activity_id = a.id ORDER BY p.id DESC LIMIT 1) AS logo_key
        FROM activity a ORDER BY a.name`,
     )
-    .all<{ id: number; name: string; logo_key: string | null }>()
+    .all<{ id: number; name: string; category: Category | null; logo_key: string | null }>()
   return results.map(({ logo_key, ...a }) => ({ ...a, logoUrl: logo_key ? photoUrl(logo_key) : null }))
 }
 

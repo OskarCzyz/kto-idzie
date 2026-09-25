@@ -86,6 +86,13 @@ export function makeView(state: CampState, meId: number) {
       if (!domainOfferings.get(oid)?.closed.includes(g) || g === 'mentee') return g
       return g === 'mentorIn' ? 'mentorOut' : 'mentorIn'
     },
+    /** Mentees and mentors going on `day`, and how many mentors are missing for 1 per 3 mentees. */
+    mentorGap(oid: number, day: number) {
+      const goers = state.people.filter((p) => res.currentChoice(p.id, day) === oid)
+      const mentors = goers.filter((p) => p.bracket === 'O18').length
+      const mentees = goers.length - mentors
+      return { mentees, mentors, missing: Math.max(0, Math.ceil(mentees / 3) - mentors) }
+    },
     dayNo: (dayId: number) => state.camp.days.find((d) => d.id === dayId)?.dayNo ?? 0,
     /** "jeśli idzie Tomek i Ola" / "jeśli idzie min. 3 chłopców" */
     conditionText(pid: number, oid: number): string | null {
