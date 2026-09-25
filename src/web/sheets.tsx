@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { setCondition, type Condition, type Plan } from '../domain'
-import { ConditionLine } from './parts'
 import { Avatar, Sheet, Thumb } from './ui'
-import { STATUS_ICON, STATUS_LABEL, eligibilityText, fullName, toDomainOffering, type View } from './view'
-import { eligible } from '../domain'
+import { GROUP_LABEL, STATUS_ICON, eligibilityText, fullName, planLetter, statusLabel, toDomainOffering, type View } from './view'
+import type { SignupGroup } from '../domain'
+
+const GROUPS: SignupGroup[] = ['mentee', 'mentorIn', 'mentorOut']
+import { eligible, isMentor } from '../domain'
 
 export function OfferingSheet({ view, oid, day, onClose, openPerson }: { view: View; oid: number; day: number; onClose: () => void; openPerson: (pid: number) => void }) {
   const o = view.offering(oid)
@@ -19,18 +21,23 @@ export function OfferingSheet({ view, oid, day, onClose, openPerson }: { view: V
       <div className="sec" style={{ textAlign: 'center' }}>
         <div className="b" style={{ fontSize: 19 }}>{a.name}</div>
         <div className="small muted">{o.dayIds.map((x) => `Dzień ${view.dayNo(x)}`).join(', ')}{eligibilityText(o) && ` · ${eligibilityText(o)}`}</div>
-        {a.description && <div className="small" style={{ margin: '6px 0' }}>{a.description}</div>}
-        <span className="badge">{o.capacity ? `max ${o.capacity} · nas ${goers.length}` : 'bez limitu'}</span>{' '}
         {o.highDemand && <span className="badge hot">🔥 duże zainteresowanie</span>}
+        <div className="groups">
+          {GROUPS.map((k) => (
+            <span key={k} className="badge">
+              {GROUP_LABEL[k]}: {o.capacity[k] === 0 ? 'nie można się zapisać' : <>nas {goers.filter((p) => view.groupOf(p.id, oid) === k).length}{o.capacity[k] != null && ` / max ${o.capacity[k]}`}</>}
+            </span>
+          ))}
+        </div>
       </div>
       <div className="sec">
-        <div className="sec-title">Idą – obecny wybór ({goers.length})</div>
-        {(['registered', 'decided', 'wondering'] as const).map((s) => {
+        <div className="sec-title">Idą ({goers.length})</div>
+        {(['registered', 'wondering'] as const).map((s) => {
           const g = goers.filter((p) => view.status(p.id, d) === s)
           if (!g.length) return null
           return (
             <div key={s}>
-              <div className="small b" style={{ margin: '4px 0' }}>{STATUS_ICON[s]} {STATUS_LABEL[s]} · {g.length}</div>
+              <div className="small b" style={{ margin: '4px 0' }}>{s === 'registered' ? '🎟️ Zapisani' : '🤔 Jeszcze niezapisani'} · {g.length}</div>
               {g.map((p) => <span key={p.id} className="namechip" onClick={() => openPerson(p.id)}><Avatar person={p} size={20} me={p.id === view.me.id} />{p.id === view.me.id ? 'Ty' : p.firstName}</span>)}
             </div>
           )
@@ -38,10 +45,10 @@ export function OfferingSheet({ view, oid, day, onClose, openPerson }: { view: V
         {!goers.length && <span className="muted">nikt</span>}
       </div>
       <div className="sec">
-        <div className="sec-title">Rozważają ({considering.length})</div>
+        <div className="sec-title">Mają jako plan zapasowy ({considering.length})</div>
         {considering.map((p) => (
           <span key={p.id} className="namechip" onClick={() => openPerson(p.id)}>
-            <Avatar person={p} size={20} me={p.id === view.me.id} />{p.id === view.me.id ? 'Ty' : p.firstName} <span className="rk">#{(view.planOf(p.id).rankings[d] ?? []).indexOf(oid) + 1}</span>
+            <Avatar person={p} size={20} me={p.id === view.me.id} />{p.id === view.me.id ? 'Ty' : p.firstName} <span className="rk">{planLetter((view.planOf(p.id).rankings[d] ?? []).indexOf(oid))}</span>
             {view.planOf(p.id).conditions[oid] && ' 🤝'}
           </span>
         ))}
@@ -70,12 +77,12 @@ export function PersonSheet({ view, pid, onClose }: { view: View; pid: number; o
         const s = view.status(pid, d.id)
         return (
           <div key={d.id} className="sec" style={{ borderTop: '1px solid var(--line)' }}>
-            <div className="row"><b>Dzień {d.dayNo}</b><span className="sp" /><span className="small">{STATUS_ICON[s]} {STATUS_LABEL[s]}</span></div>
+            <div className="row"><b>Dzień {d.dayNo}</b><span className="sp" /><span className="small">{STATUS_ICON[s]} {statusLabel(s, p.gender)}</span></div>
             {ranking.length ? (
               ranking.map((oid, i) => (
                 <div key={oid} className="small" style={{ marginTop: 4, fontWeight: oid === current ? 700 : 400, color: oid === current ? undefined : 'var(--muted)' }}>
-                  {i + 1}. {view.activityOf(oid).name}{oid === current && ' ← idzie'}
-                  <ConditionLine view={view} pid={pid} oid={oid} day={d.id} />
+                  {planLetter(i)}. {view.activityOf(oid).name}{isMentor(p) && ` (${GROUP_LABEL[view.groupOf(pid, oid)]})`}{oid === current && ' ← idzie'}
+                  {view.conditionText(pid, oid) && <span style={{ color: 'var(--cond)' }}> · 🤝 {view.conditionText(pid, oid)}</span>}
                 </div>
               ))
             ) : (
@@ -88,19 +95,20 @@ export function PersonSheet({ view, pid, onClose }: { view: View; pid: number; o
   )
 }
 
+/** "Pójdę, jeśli idzie też…": specific people; at least N of my gender is under "Więcej opcji". */
 export function ConditionSheet({ view, oid, day, edit, onClose }: { view: View; oid: number; day: number; edit: (change: (plan: Plan) => Plan) => void; onClose: () => void }) {
   const existing = view.myPlan.conditions[oid]
-  const [mode, setMode] = useState<Condition['kind']>(existing?.kind ?? 'people')
   const [people, setPeople] = useState<number[]>(existing?.kind === 'people' ? existing.people : [])
+  const [more, setMore] = useState(existing?.kind === 'min')
   const [min, setMin] = useState(existing?.kind === 'min' ? existing.min : 2)
   const [query, setQuery] = useState('')
   const o = view.offering(oid)
-  const activity = view.activityOf(oid)
   const me = view.me
   const own = me.gender === 'K' ? 'dziewczyn' : 'chłopców'
+  const going = (pid: number) => view.res.currentChoice(pid, day) === oid
   const candidates = view.state.people
     .filter((p) => p.id !== me.id && eligible(p, toDomainOffering(o)) && (!query || fullName(p).toLowerCase().includes(query.toLowerCase())))
-    .sort((a, b) => Number(people.includes(b.id)) - Number(people.includes(a.id)))
+    .sort((a, b) => Number(people.includes(b.id)) - Number(people.includes(a.id)) || Number(going(b.id)) - Number(going(a.id)))
   const toggle = (id: number) => setPeople((ps) => (ps.includes(id) ? ps.filter((x) => x !== id) : [...ps, id]))
   const sameGenderGoing = view.goers(oid, day).filter((p) => p.id !== me.id && p.gender === me.gender).length
 
@@ -112,50 +120,40 @@ export function ConditionSheet({ view, oid, day, edit, onClose }: { view: View; 
   return (
     <Sheet onClose={onClose}>
       <div className="sec">
-        <div className="b" style={{ fontSize: 18 }}>{activity.name}: pójdę, jeśli…</div>
-        <div className="small muted" style={{ marginTop: 3 }}>Warunek jest spełniony, gdy te osoby mają to jako swój <b>obecny wybór</b>.</div>
+        <div className="b" style={{ fontSize: 18 }}>Pójdę na {view.activityOf(oid).name}, jeśli idzie też…</div>
+        <div className="small muted" style={{ marginTop: 3 }}>Zaznacz osoby. Dopóki nie idą, ten plan czeka, a liczy się następny.</div>
       </div>
-      <div className="sec seg">
-        <button className={mode === 'people' ? 'on' : ''} onClick={() => setMode('people')}>Konkretne osoby</button>
-        <button className={mode === 'min' ? 'on' : ''} onClick={() => setMode('min')}>Min. {own}</button>
+      <div className="sec">
+        <input className="input" placeholder="Szukaj osoby…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        {candidates.slice(0, 8).map((p) => (
+          <button key={p.id} className="pi" onClick={() => toggle(p.id)}>
+            <Avatar person={p} />
+            <span>{fullName(p)}</span>
+            <span className="sp" />
+            <span className="small muted">{going(p.id) ? 'idzie' : ''}</span>
+            <span>{people.includes(p.id) ? '☑️' : '⬜'}</span>
+          </button>
+        ))}
       </div>
-      {mode === 'people' ? (
-        <div className="sec">
-          {people.map((id) => {
-            const p = view.person(id)
-            return p && <span key={id} className="namechip"><Avatar person={p} size={20} />{p.firstName} <button onClick={() => toggle(id)}>✕</button></span>
-          })}
-          {!people.length && <span className="muted small">Nikt nie wybrany</span>}
-          <input className="input" style={{ marginTop: 8 }} placeholder="Szukaj osoby…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          {candidates.slice(0, 8).map((p) => {
-            const c = view.res.currentChoice(p.id, day)
-            const considers = (view.planOf(p.id).rankings[day] ?? []).includes(oid)
-            return (
-              <button key={p.id} className="pi" onClick={() => toggle(p.id)}>
-                <Avatar person={p} />
-                <span>{fullName(p)}</span>
-                <span className="sp" />
-                <span className="small muted">{c === oid ? 'idzie' : considers ? 'rozważa' : ''}</span>
-                <span>{people.includes(p.id) ? '☑️' : '⬜'}</span>
-              </button>
-            )
-          })}
-        </div>
-      ) : (
-        <div className="sec">
-          <div className="stepper">
-            <button onClick={() => setMin(Math.max(1, min - 1))}>−</button>
-            <span className="b" style={{ fontSize: 22 }}>{min}</span>
-            <button onClick={() => setMin(min + 1)}>+</button>
-            <span className="muted small">{own} oprócz Ciebie</span>
+      <div className="sec">
+        <button className="linkb" onClick={() => setMore(!more)}>Więcej opcji {more ? '▴' : '▾'}</button>
+        {more && (
+          <div className="card pad" style={{ margin: '8px 0 0' }}>
+            <div className="small muted">Zamiast konkretnych osób: pójdę, jeśli idzie co najmniej</div>
+            <div className="stepper" style={{ marginTop: 6 }}>
+              <button onClick={() => setMin(Math.max(1, min - 1))}>−</button>
+              <span className="b" style={{ fontSize: 20 }}>{min}</span>
+              <button onClick={() => setMin(min + 1)}>+</button>
+              <span className="muted small">{own} oprócz Ciebie</span>
+            </div>
+            <div className="small muted" style={{ marginTop: 6 }}>Teraz idzie: {sameGenderGoing} {own}</div>
+            <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => save({ kind: 'min', min })}>Zapisz: min. {min} {own}</button>
           </div>
-          <div className="small muted" style={{ marginTop: 8 }}>Teraz idzie: {sameGenderGoing} {own}</div>
-        </div>
-      )}
-      {existing && <div className="sec"><ConditionLine view={view} pid={me.id} oid={oid} day={day} /></div>}
+        )}
+      </div>
       <div className="sec" style={{ display: 'grid', gap: 8 }}>
-        <button className="btn" disabled={mode === 'people' && !people.length} onClick={() => save(mode === 'people' ? { kind: 'people', people } : { kind: 'min', min })}>Zapisz warunek</button>
-        {existing && <button className="btn ghost" onClick={() => save(null)}>Bez warunku</button>}
+        <button className="btn" disabled={!people.length} onClick={() => save({ kind: 'people', people })}>Zapisz</button>
+        <button className="btn ghost" onClick={() => save(null)}>Idę niezależnie od innych</button>
       </div>
     </Sheet>
   )

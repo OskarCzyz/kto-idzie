@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Activity, PersonDto } from '../shared/api'
 
 const HUES = ['#c9716f', '#6fae7a', '#5d93c4', '#9a87d6', '#c872a0', '#5faeab', '#d19a62', '#6d8fb0']
@@ -34,4 +34,25 @@ export function Sheet({ onClose, children }: { onClose: () => void; children: Re
       </div>
     </div>
   )
+}
+
+export type Choose = (question: string, options: string[]) => Promise<number | null>
+
+/** A question with several answers in a bottom sheet. Resolves the chosen index, or null when dismissed. */
+export function useChoice(): [ReactNode, Choose] {
+  const [q, setQ] = useState<{ question: string; options: string[]; resolve: (i: number | null) => void } | null>(null)
+  const choose: Choose = (question, options) => new Promise((resolve) => setQ({ question, options, resolve }))
+  const close = (i: number | null) => {
+    q?.resolve(i)
+    setQ(null)
+  }
+  const sheet = q && (
+    <Sheet onClose={() => close(null)}>
+      <div className="sec b" style={{ fontSize: 16 }}>{q.question}</div>
+      <div className="sec" style={{ display: 'grid', gap: 8 }}>
+        {q.options.map((o, i) => <button key={o} className={`btn ${i ? 'ghost' : ''}`} onClick={() => close(i)}>{o}</button>)}
+      </div>
+    </Sheet>
+  )
+  return [sheet, choose]
 }

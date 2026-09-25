@@ -21,31 +21,24 @@ DAYS.forEach((d) => sql.push(`INSERT INTO camp_day (id, camp_id, day_no, date) V
 for (const [b, from, to] of [['U15', '2026-10-01', '2026-10-05'], ['U18', '2026-10-08', '2026-10-12'], ['O18', '2026-10-15', null]])
   sql.push(`INSERT INTO wave (camp_id, bracket, opens_at, closes_at) VALUES (1, '${b}', '${from}', ${q(to)});`)
 
-const ACTS = [
-  ['Kajaki', 'Spływ Wieprzem, 12 km, kamizelki na miejscu.'], ['Wspinaczka', 'Ścianka + skałki z instruktorem.'],
-  ['Piłka nożna', 'Turniej drużyn mieszanych.'], ['Siatkówka', 'Plażówka przy jeziorze.'],
-  ['Warsztaty plastyczne', 'Malowanie na szkle i linoryt.'], ['Gotowanie', 'Chleb i pierogi na kolację dla wszystkich.'],
-  ['Rajd rowerowy', '35 km po okolicy.'], ['Teatr', 'Dwa dni prób, spektakl wieczorem.'],
-  ['Survival', 'Nocleg w lesie, orientacja w terenie.'], ['Fotografia', 'Plener i obróbka zdjęć w telefonie.'],
-  ['Warsztaty muzyczne', 'Cały obóz: zespół gra na koncercie finałowym.'], ['Taniec', 'Choreografia na koncert.'],
-  ['Łucznictwo', 'Strzelanie do tarcz, zawody na koniec.'],
-]
-ACTS.forEach(([n, d], i) => sql.push(`INSERT INTO activity (id, name, description) VALUES (${i + 1}, ${q(n)}, ${q(d)});`))
-const act = (name) => ACTS.findIndex((a) => a[0] === name) + 1
+const ACTS = ['Kajaki', 'Wspinaczka', 'Piłka nożna', 'Siatkówka', 'Warsztaty plastyczne', 'Gotowanie', 'Rajd rowerowy', 'Teatr', 'Survival', 'Fotografia', 'Warsztaty muzyczne', 'Taniec', 'Łucznictwo']
+ACTS.forEach((n, i) => sql.push(`INSERT INTO activity (id, name) VALUES (${i + 1}, ${q(n)});`))
+const act = (name) => ACTS.indexOf(name) + 1
 
 const OFF = []
-const o = (name, days, x = {}) => OFF.push({ id: OFF.length + 1, act: act(name), days, gender: x.g ?? null, brackets: x.b ?? null, cap: x.cap ?? null, hot: x.hot ? 1 : 0 })
+// cap = mentee limit; mentors get a small limit of their own where there is one.
+const o = (name, days, x = {}) => OFF.push({ id: OFF.length + 1, act: act(name), days, gender: x.g ?? null, cap: x.cap ?? null, capIn: x.cap ? Math.ceil(x.cap / 6) : null, capOut: x.cap ? 2 : null, hot: x.hot ? 1 : 0 })
 o('Kajaki', [1], { cap: 20, hot: true }); o('Kajaki', [3], { cap: 20 })
 o('Wspinaczka', [1], { g: 'K', cap: 12, hot: true }); o('Wspinaczka', [2], { g: 'M', cap: 12, hot: true })
 o('Piłka nożna', [1], { g: 'M' }); o('Piłka nożna', [2]); o('Piłka nożna', [4])
 o('Siatkówka', [2]); o('Siatkówka', [3]); o('Warsztaty plastyczne', [1]); o('Warsztaty plastyczne', [3])
 o('Gotowanie', [2], { cap: 10, hot: true }); o('Gotowanie', [4], { cap: 10 })
-o('Rajd rowerowy', [3], { b: ['U18', 'O18'], cap: 25 }); o('Teatr', [1, 2], { cap: 15 })
-o('Survival', [3, 4], { b: ['O18'], cap: 14, hot: true }); o('Fotografia', [2]); o('Fotografia', [4])
+o('Rajd rowerowy', [3], { cap: 25 }); o('Teatr', [1, 2], { cap: 15 })
+o('Survival', [3, 4], { cap: 14, hot: true }); o('Fotografia', [2]); o('Fotografia', [4])
 o('Warsztaty muzyczne', [1, 2, 3, 4], { cap: 30 }); o('Taniec', [3], { g: 'K' }); o('Taniec', [4])
-o('Łucznictwo', [4], { b: ['U15'], cap: 16, hot: true }); o('Łucznictwo', [1], { b: ['U18', 'O18'], cap: 16 })
+o('Łucznictwo', [4], { cap: 16, hot: true }); o('Łucznictwo', [1], { cap: 16 })
 for (const x of OFF) {
-  sql.push(`INSERT INTO offering (id, camp_id, activity_id, gender, brackets, capacity, high_demand) VALUES (${x.id}, 1, ${x.act}, ${q(x.gender)}, ${q(x.brackets?.join(','))}, ${q(x.cap)}, ${x.hot});`)
+  sql.push(`INSERT INTO offering (id, camp_id, activity_id, gender, capacity_mentee, capacity_mentor_in, capacity_mentor_out, high_demand) VALUES (${x.id}, 1, ${x.act}, ${q(x.gender)}, ${q(x.cap)}, ${q(x.capIn)}, ${q(x.capOut)}, ${x.hot});`)
   x.days.forEach((d) => sql.push(`INSERT INTO offering_day VALUES (${x.id}, ${d});`))
 }
 
@@ -57,7 +50,7 @@ const PEOPLE = [...BOYS.map((n) => [n, 'M']), ...GIRLS.map((n) => [n, 'K'])].map
 })
 PEOPLE.forEach((p) => sql.push(`INSERT INTO participant (id, telegram_id, first_name, gender, bracket, is_organizer) VALUES (${p.id}, ${p.id}, ${q(p.name)}, '${p.gender}', '${p.bracket}', ${p.id === 1 ? 1 : 0});`))
 
-const eligible = (p, x) => (!x.gender || x.gender === p.gender) && (!x.brackets || x.brackets.includes(p.bracket))
+const eligible = (p, x) => !x.gender || x.gender === p.gender
 let pickId = 0
 for (const p of PEOPLE.slice(2)) {
   const ranking = Object.fromEntries(DAYS.map((d) => [d, []]))
@@ -71,11 +64,11 @@ for (const p of PEOPLE.slice(2)) {
       x.days.forEach((dd) => ranking[dd].push(x.id))
     }
   }
-  for (const [oid, pk] of picks) sql.push(`INSERT INTO pick (id, participant_id, offering_id, cond_people, cond_min) VALUES (${pk.id}, ${p.id}, ${oid}, ${q(pk.cond.people ? JSON.stringify(pk.cond.people) : null)}, ${q(pk.cond.min)});`)
+  for (const [oid, pk] of picks) sql.push(`INSERT INTO pick (id, participant_id, offering_id, cond_people, cond_min, mentor_role) VALUES (${pk.id}, ${p.id}, ${oid}, ${q(pk.cond.people ? JSON.stringify(pk.cond.people) : null)}, ${q(pk.cond.min)}, ${q(p.bracket === 'O18' ? (rnd() < 0.3 ? 'out' : 'in') : null)});`)
   for (const d of DAYS) {
     ranking[d].forEach((oid, i) => sql.push(`INSERT INTO pick_rank VALUES (${picks.get(oid).id}, ${d}, ${i});`))
     const r = rnd()
-    if (ranking[d].length && r < 0.34 && OFF[ranking[d][0] - 1].days.length === 1) sql.push(`INSERT INTO day_status VALUES (${p.id}, ${d}, '${r < 0.22 ? 'decided' : 'registered'}');`)
+    if (ranking[d].length && r < 0.34 && OFF[ranking[d][0] - 1].days.length === 1) sql.push(`INSERT INTO day_status VALUES (${p.id}, ${d}, 'registered');`)
   }
 }
 // Kuba (1) & Tomek (2): the conflict + mutual-condition demo from the prototype.

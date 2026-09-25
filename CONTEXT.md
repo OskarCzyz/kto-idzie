@@ -13,15 +13,19 @@ One day of the camp. A participant can be registered for at most one activity pe
 _Avoid_: Slot, session
 
 **Activity**:
-Something to do at the camp (e.g. kayaking), with a name, a short description and one logo image, entered manually by the organizer. A camp has about 20–30. An activity can be offered on several camp days. Activities outlive a camp, so they can be copied into the next one. Participants, offerings and picks are deleted when the camp ends.
+Something to do at the camp (e.g. kayaking), with a name and one logo image, entered manually by the organizer. Its real description lives in the event app; here we only see who goes where. A camp has about 20–30. An activity can be offered on several camp days. Activities outlive a camp, so they can be copied into the next one. Participants, offerings and picks are deleted when the camp ends.
 _Avoid_: Event, workshop, session
 
 **Offering**:
-An activity available on specific camp day(s) for a specific set of eligible participants, restricted by gender and/or age bracket (e.g. "kayaking, day 2, girls only"). Participants who are not eligible can't pick it and don't see it by default. A multi-day offering (up to the whole camp) takes up every camp day it covers. Participants choose offerings, not activities.
+An activity available on specific camp day(s), optionally restricted by gender (e.g. "kayaking, day 2, girls only"). Every age bracket can pick every offering. Participants who are not eligible can't pick it and don't see it by default. A multi-day offering (up to the whole camp) takes up every camp day it covers. Participants choose offerings, not activities.
 _Avoid_: Instance, occurrence, session
 
+**Signup group**:
+Who a participant registers as for an offering in the external system: **mentee** (every U15/U18 participant), **mentor taking part** or **mentor not taking part** (O18 only; chosen per pick, taking part by default).
+_Avoid_: Role, category
+
 **Capacity**:
-The maximum number of places in an offering, across *all* youth groups at the camp, not only ours. It can be unlimited. It is shown for information only and never blocks a pick.
+The maximum number of places in each signup group of an offering, across *all* youth groups at the camp, not only ours. It can be unlimited. It is shown for information only and never blocks a pick.
 _Avoid_: Limit, seats
 
 **High demand**:
@@ -35,7 +39,7 @@ A member of the camp's closed youth group (about 50 people, all known to each ot
 _Avoid_: User, attendee, member
 
 **Age bracket**:
-One of U15, U18, O18. It decides the participant's registration wave and which offerings they are eligible for.
+One of U15, U18, O18. It decides the participant's registration wave and signup group (O18 = mentor).
 _Avoid_: Age group, category
 
 **Organizer**:
@@ -49,7 +53,7 @@ _Avoid_: Team, community
 ## Planning
 
 **Ranking**:
-A participant's ordered list of the offerings they are considering for one camp day. #1 is what they would choose if everything went perfectly. It can include every offering they are eligible for.
+A participant's ordered list of the offerings they are considering for one camp day. #1 is what they would choose if everything went perfectly. It can include every offering they are eligible for. The app shows the positions as **Plan A, Plan B, …**: each plan counts only if the ones above it don't work out.
 _Avoid_: Shortlist, preferences, votes
 
 **Pick**:
@@ -69,7 +73,7 @@ A multi-day pick that is outranked on one of its days by a pick the participant 
 _Avoid_: Clash, overlap
 
 **Day status**:
-How settled a participant is about a camp day. One of **Undecided** (empty ranking), **Wondering** (a ranking, not settled), **Decided** (going to their current choice) or **Registered** (signed up externally for it; can be undone only after explicit confirmation).
+How settled a participant is about a camp day. One of **Undecided** (empty ranking), **Wondering** (a ranking, not yet registered) or **Registered** (signed up externally for their current choice, which becomes #1 and ignores its condition; can be undone only after explicit confirmation).
 _Avoid_: Stance, state
 
 **Plan**:

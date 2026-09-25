@@ -1,26 +1,45 @@
 import { describe, expect, it } from 'vitest'
-import { dayStatus, eligible, resolve, type Offering, type Participant, type Plan } from './index'
+import { dayStatus, eligible, resolve, signupGroup, type Offering, type Participant, type Plan } from './index'
 
 const boy = (id: number): Participant => ({ id, gender: 'M', bracket: 'U18' })
 const girl = (id: number): Participant => ({ id, gender: 'K', bracket: 'U18' })
 const single = (id: number, day: number, extra: Partial<Offering> = {}): Offering => ({
-  id, days: [day], gender: null, brackets: null, ...extra,
+  id, days: [day], gender: null, closed: [], ...extra,
 })
 
 function plan(participantId: number, p: Partial<Omit<Plan, 'participantId'>> = {}): Plan {
-  return { participantId, rankings: {}, conditions: {}, statuses: {}, ...p }
+  return { participantId, rankings: {}, conditions: {}, statuses: {}, mentorRoles: {}, ...p }
 }
 
 const KAYAK = 10, CLIMB = 11, ARCHERY = 12, THEATRE = 20
 
 describe('eligible', () => {
-  it('respects gender and bracket restrictions', () => {
+  it('respects the gender restriction; every bracket can pick', () => {
     const girlsOnly = single(1, 1, { gender: 'K' })
-    const o18Only = single(2, 1, { brackets: ['O18'] })
     expect(eligible(girl(1), girlsOnly)).toBe(true)
     expect(eligible(boy(2), girlsOnly)).toBe(false)
-    expect(eligible(girl(1), o18Only)).toBe(false)
-    expect(eligible({ id: 3, gender: 'M', bracket: 'O18' }, o18Only)).toBe(true)
+    expect(eligible({ id: 3, gender: 'M', bracket: 'U15' }, single(2, 1))).toBe(true)
+  })
+
+  it('a closed signup group (capacity 0) cannot pick; a mentor needs one open mentor group', () => {
+    const noMentees = single(1, 1, { closed: ['mentee'] })
+    const oneMentorRole = single(2, 1, { closed: ['mentorOut'] })
+    const noMentors = single(3, 1, { closed: ['mentorIn', 'mentorOut'] })
+    const mentor: Participant = { id: 3, gender: 'M', bracket: 'O18' }
+    expect(eligible(boy(1), noMentees)).toBe(false)
+    expect(eligible(mentor, noMentees)).toBe(true)
+    expect(eligible(mentor, oneMentorRole)).toBe(true)
+    expect(eligible(mentor, noMentors)).toBe(false)
+    expect(eligible(boy(1), noMentors)).toBe(true)
+  })
+})
+
+describe('signupGroup', () => {
+  it('U15/U18 are mentees; O18 are mentors taking part unless they chose not to', () => {
+    const o18 = { bracket: 'O18' as const }
+    expect(signupGroup({ bracket: 'U15' }, plan(1, { mentorRoles: { [KAYAK]: 'out' } }), KAYAK)).toBe('mentee')
+    expect(signupGroup(o18, plan(1), KAYAK)).toBe('mentorIn')
+    expect(signupGroup(o18, plan(1, { mentorRoles: { [KAYAK]: 'out' } }), KAYAK)).toBe('mentorOut')
   })
 })
 
@@ -32,7 +51,7 @@ describe('dayStatus', () => {
   })
 
   it('an empty ranking is undecided even if a status was stored', () => {
-    expect(dayStatus(plan(1, { rankings: { 1: [] }, statuses: { 1: 'decided' } }), 1)).toBe('undecided')
+    expect(dayStatus(plan(1, { rankings: { 1: [] }, statuses: { 1: 'registered' } }), 1)).toBe('undecided')
   })
 })
 
@@ -133,17 +152,17 @@ describe('resolve', () => {
     expect([1, 2, 3].map((p) => r.currentChoice(p, 1))).toEqual([KAYAK, KAYAK, ARCHERY])
   })
 
-  it('decided and registered days take #1 and ignore its condition', () => {
+  it('registered days take #1 and ignore its condition', () => {
     const r = resolve({
       participants: [boy(1)],
       offerings,
-      plans: [plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'min', min: 5 } }, statuses: { 1: 'decided' } })],
+      plans: [plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'min', min: 5 } }, statuses: { 1: 'registered' } })],
     })
     expect(r.currentChoice(1, 1)).toBe(CLIMB)
   })
 
   describe('multi-day picks', () => {
-    const theatre: Offering = { id: THEATRE, days: [1, 2], gender: null, brackets: null }
+    const theatre: Offering = { id: THEATRE, days: [1, 2], gender: null, closed: [] }
     const ms = [theatre, single(KAYAK, 1), single(CLIMB, 2)]
 
     it('is the current choice on all its days when it wins on all of them', () => {

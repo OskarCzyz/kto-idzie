@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { addPick, keepOnAllDays, movePick, normalizePlan, removePick, setDayStatus, type Offering, type Plan } from './index'
+import { addPick, keepOnAllDays, movePick, normalizePlan, removePick, setDayStatus, setMentorRole, type Offering, type Plan } from './index'
 
-const o = (id: number, days: number[], extra: Partial<Offering> = {}): Offering => ({ id, days, gender: null, brackets: null, ...extra })
+const o = (id: number, days: number[], extra: Partial<Offering> = {}): Offering => ({ id, days, gender: null, closed: [], ...extra })
 const KAYAK = o(1, [1]), CLIMB = o(2, [2]), THEATRE = o(3, [1, 2]), ARCHERY = o(4, [1]), GIRLS = o(5, [1], { gender: 'K' })
 const offerings = [KAYAK, CLIMB, THEATRE, ARCHERY, GIRLS]
-const empty: Plan = { participantId: 1, rankings: {}, conditions: {}, statuses: {} }
+const empty: Plan = { participantId: 1, rankings: {}, conditions: {}, statuses: {}, mentorRoles: {} }
 
 describe('plan editing', () => {
   it('adds a multi-day pick to the end of every day it covers', () => {
@@ -20,7 +20,7 @@ describe('plan editing', () => {
 
   it('removes a pick from all days with its condition, and clears status of emptied days', () => {
     let p = addPick(addPick(empty, THEATRE, { kind: 'min', min: 1 }), ARCHERY)
-    p = setDayStatus(p, 2, 'decided', offerings)
+    p = setDayStatus(p, 2, 'registered', offerings)
     p = removePick(p, THEATRE)
     expect(p.rankings).toEqual({ 1: [4], 2: [] })
     expect(p.conditions).toEqual({})
@@ -29,16 +29,16 @@ describe('plan editing', () => {
 
   it('moving changes order; a new #1 sets the day back to wondering', () => {
     let p = addPick(addPick(addPick(empty, KAYAK), ARCHERY), THEATRE)
-    p = setDayStatus(p, 1, 'decided', offerings)
+    p = setDayStatus(p, 1, 'registered', offerings)
     const reordered = movePick(p, 1, 2, 1)
     expect(reordered.rankings[1]).toEqual([1, 3, 4])
-    expect(reordered.statuses[1]).toBe('decided')
+    expect(reordered.statuses[1]).toBe('registered')
     const newTop = movePick(p, 1, 2, 0)
     expect(newTop.rankings[1]).toEqual([3, 1, 4])
     expect(newTop.statuses[1]).toBeUndefined()
   })
 
-  it('deciding a multi-day #1 puts it first on all its days with the same status', () => {
+  it('registering a multi-day #1 puts it first on all its days with the same status', () => {
     let p = addPick(addPick(addPick(empty, THEATRE), KAYAK), CLIMB) // day 2: theatre, climb
     p = movePick(p, 2, 1, 0) // day 2: climb, theatre
     p = setDayStatus(p, 1, 'registered', offerings)
@@ -49,7 +49,7 @@ describe('plan editing', () => {
   it('keepOnAllDays resolves a conflict by moving the pick to #1 everywhere', () => {
     let p = addPick(addPick(addPick(empty, THEATRE), CLIMB), KAYAK)
     p = movePick(p, 2, 1, 0)
-    p = setDayStatus(p, 2, 'decided', offerings)
+    p = setDayStatus(p, 2, 'registered', offerings)
     p = keepOnAllDays(p, THEATRE)
     expect(p.rankings).toEqual({ 1: [3, 1], 2: [3, 2] })
     expect(p.statuses[2]).toBeUndefined()
@@ -75,13 +75,25 @@ describe('normalizePlan', () => {
         ...empty,
         rankings: { 1: [1, 4] },
         conditions: { 1: { kind: 'people', people: [1, 2, 77] }, 4: { kind: 'min', min: 0 }, 2: { kind: 'min', min: 3 } },
-        statuses: { 1: 'decided', 2: 'decided' },
+        statuses: { 1: 'registered', 2: 'registered' },
       },
       offerings,
       me,
       new Set([1, 2]),
     )
     expect(p.conditions).toEqual({ 1: { kind: 'people', people: [2] } })
-    expect(p.statuses).toEqual({ 1: 'decided' })
+    expect(p.statuses).toEqual({ 1: 'registered' })
+  })
+
+  it('keeps mentor roles only for an O18 participant and only for picked offerings', () => {
+    const plan = { ...setMentorRole(setMentorRole(empty, 1, 'out'), 2, 'out'), rankings: { 1: [1] } }
+    expect(normalizePlan(plan, offerings, { ...me, bracket: 'O18' }, new Set([1])).mentorRoles).toEqual({ 1: 'out' })
+    expect(normalizePlan(plan, offerings, me, new Set([1])).mentorRoles).toEqual({})
+  })
+
+  it('switches a mentor to the other role when theirs is closed', () => {
+    const noOut = o(6, [2], { closed: ['mentorOut'] }), noIn = o(7, [2], { closed: ['mentorIn'] })
+    const plan = { ...empty, rankings: { 2: [6, 7] }, mentorRoles: { 6: 'out' as const } }
+    expect(normalizePlan(plan, [noOut, noIn], { ...me, bracket: 'O18' }, new Set([1])).mentorRoles).toEqual({ 7: 'out' })
   })
 })

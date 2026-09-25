@@ -1,13 +1,32 @@
 // Read model for the planner: the camp state plus the resolved current choices, with lookup helpers.
-import { dayStatus, eligible, resolve, type DayStatus, type Offering, type Plan } from '../domain'
+import { closedGroups, dayStatus, eligible, resolve, signupGroup, type DayStatus, type Gender, type Offering, type Plan, type SignupGroup } from '../domain'
 import type { Activity, CampState, OfferingDto, PersonDto } from '../shared/api'
 
 export type Filter = 'all' | 'M' | 'K' | 'mine'
 
-export const toDomainOffering = (o: OfferingDto): Offering => ({ id: o.id, days: o.dayIds, gender: o.gender, brackets: o.brackets })
+export const toDomainOffering = (o: OfferingDto): Offering => ({ id: o.id, days: o.dayIds, gender: o.gender, closed: closedGroups(o.capacity) })
 
-export const STATUS_ICON: Record<DayStatus, string> = { undecided: '·', wondering: '🤔', decided: '✅', registered: '🎟️' }
-export const STATUS_LABEL: Record<DayStatus, string> = { undecided: 'Brak', wondering: 'Zastanawiam się', decided: 'Zdecydowany', registered: 'Zapisany' }
+export const STATUS_ICON: Record<DayStatus, string> = { undecided: '·', wondering: '🤔', registered: '🎟️' }
+const STATUS_LABEL: Record<DayStatus, string> = { undecided: 'Brak planu', wondering: 'Jeszcze niezapisany', registered: 'Zapisany' }
+const STATUS_LABEL_K: Record<DayStatus, string> = { ...STATUS_LABEL, wondering: 'Jeszcze niezapisana', registered: 'Zapisana' }
+
+/** Status label in the person's grammatical gender (feminine for girls). */
+export const statusLabel = (s: DayStatus, gender?: Gender | null) => (gender === 'K' ? STATUS_LABEL_K : STATUS_LABEL)[s]
+
+export const GROUP_LABEL: Record<SignupGroup, string> = { mentee: 'mentee', mentorIn: 'mentor uczestniczący', mentorOut: 'mentor nieuczestniczący' }
+const GROUP_SHORT: Record<SignupGroup, string> = { mentee: 'mentee', mentorIn: 'mentor ucz.', mentorOut: 'mentor nieucz.' }
+
+/** "limit: mentee 20 · mentor ucz. 3" – only the groups that have a limit (optionally only `groups`). */
+export function capacityText(c: OfferingDto['capacity'], groups = Object.keys(GROUP_SHORT) as SignupGroup[]): string {
+  const parts = groups.filter((k) => c[k] != null).map((k) => `${GROUP_SHORT[k]} ${c[k]}`)
+  return parts.length ? `limit: ${parts.join(' · ')}` : 'bez limitu'
+}
+
+/** Plan letter for a ranking position: 0 → A, 1 → B… */
+export const planLetter = (i: number) => 'ABCDEFGH'[i] ?? String(i + 1)
+
+/** Picks the masculine or feminine form for `gender`. */
+export const g = (gender: Gender | null | undefined, m: string, k: string) => (gender === 'K' ? k : m)
 
 export type View = ReturnType<typeof makeView>
 
@@ -21,7 +40,7 @@ export function makeView(state: CampState, meId: number) {
   const offeringDtos = new Map(state.offerings.map((o) => [o.id, o]))
   const domainOfferings = new Map(offerings.map((o) => [o.id, o]))
   const me = people.get(meId)!
-  const emptyPlan: Plan = { participantId: meId, rankings: {}, conditions: {}, statuses: {} }
+  const emptyPlan: Plan = { participantId: meId, rankings: {}, conditions: {}, statuses: {}, mentorRoles: {} }
 
   const planOf = (pid: number): Plan => plans.get(pid) ?? { ...emptyPlan, participantId: pid }
   const matches = (p: PersonDto, f: Filter) => (f === 'all' ? true : f === 'mine' ? p.bracket === me.bracket : p.gender === f)
@@ -43,7 +62,7 @@ export function makeView(state: CampState, meId: number) {
     offeringsOn: (day: number) => state.offerings.filter((o) => o.dayIds.includes(day)),
     /** People for whom this offering is their current choice on `day`, registered first. */
     goers(oid: number, day: number, f: Filter = 'all') {
-      const order: Record<DayStatus, number> = { registered: 0, decided: 1, wondering: 2, undecided: 3 }
+      const order: Record<DayStatus, number> = { registered: 0, wondering: 1, undecided: 2 }
       return state.people
         .filter((p) => res.currentChoice(p.id, day) === oid && matches(p, f))
         .sort((a, b) => order[status(a.id, day)] - order[status(b.id, day)])
@@ -60,12 +79,39 @@ export function makeView(state: CampState, meId: number) {
       const nos = o.dayIds.map((d) => state.camp.days.find((x) => x.id === d)?.dayNo ?? '?')
       return `dni ${nos.join(', ')}`
     },
+    /** The signup group this person would register in for the offering. */
+    groupOf(pid: number, oid: number): SignupGroup {
+      const g = signupGroup(people.get(pid) ?? { bracket: 'U18' }, planOf(pid), oid)
+      // Until the server normalizes the plan, a closed mentor role means the other one.
+      if (!domainOfferings.get(oid)?.closed.includes(g) || g === 'mentee') return g
+      return g === 'mentorIn' ? 'mentorOut' : 'mentorIn'
+    },
     dayNo: (dayId: number) => state.camp.days.find((d) => d.id === dayId)?.dayNo ?? 0,
+    /** "jeśli idzie Tomek i Ola" / "jeśli idzie min. 3 chłopców" */
+    conditionText(pid: number, oid: number): string | null {
+      const c = planOf(pid).conditions[oid]
+      if (!c) return null
+      if (c.kind === 'min') return `jeśli idzie min. ${c.min} ${people.get(pid)?.gender === 'K' ? 'dziewczyn' : 'chłopców'}`
+      return 'jeśli idzie ' + c.people.map((q) => (q === meId ? 'Ty' : (people.get(q)?.firstName ?? '?'))).join(' i ')
+    },
   }
 }
 
+/** Short state of one of my plans on a day: going, waiting for its condition, in conflict, or a backup. */
+export function planState(view: View, day: number, oid: number): { text: string; tone: 'ok' | 'wait' | 'muted' } {
+  const me = view.me.id
+  const current = view.res.currentChoice(me, day)
+  const ranking = view.myPlan.rankings[day] ?? []
+  const cond = view.conditionText(me, oid)
+  if (current === oid) return { text: cond ? `✓ idziesz (${cond.replace('jeśli ', '')} ✓)` : '✓ idziesz', tone: 'ok' }
+  if (cond && !view.res.conditionMet(me, oid, day)) return { text: `⏳ czeka – ${cond}`, tone: 'wait' }
+  if (view.res.conflicts(me).includes(oid)) return { text: '⚠️ koliduje z innym dniem', tone: 'wait' }
+  if (current != null && ranking.indexOf(current) < ranking.indexOf(oid)) return { text: 'zapasowy – na razie niepotrzebny', tone: 'muted' }
+  return { text: '', tone: 'muted' }
+}
+
 export const eligibilityText = (o: OfferingDto) =>
-  [o.gender === 'K' ? 'tylko dziewczyny' : o.gender === 'M' ? 'tylko chłopcy' : '', o.brackets?.join('/') ?? ''].filter(Boolean).join(' · ')
+  o.gender === 'K' ? 'tylko dziewczyny' : o.gender === 'M' ? 'tylko chłopcy' : ''
 
 export const fullName = (p: PersonDto) => [p.firstName, p.lastName].filter(Boolean).join(' ')
 

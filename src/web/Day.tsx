@@ -1,139 +1,231 @@
-import { useState } from 'react'
-import { addPick, keepOnAllDays, removePick, setDayStatus, type Plan, type StoredDayStatus } from '../domain'
-import { FilterChips, GoersLine } from './parts'
-import { Ranking } from './Ranking'
-import { confirmAsync } from './telegram'
-import { Avatar, Thumb } from './ui'
-import { STATUS_ICON, STATUS_LABEL, eligibilityText, type Filter, type View } from './view'
+// One camp day, step by step: "Na co chcesz iść?" → "Idziesz niezależnie od innych?" → "A gdyby nie wyszło?",
+// then a summary of my plans (A, B, C… = the ranking, highest first).
+import { useState, type ReactNode } from 'react'
+import { addPick, isMentor, keepOnAllDays, openGroups, movePick, removePick, setDayStatus, setMentorRole, type MentorRole, type Plan } from '../domain'
+import { Coach } from './Coach'
+import { GoingWith } from './parts'
+import { Thumb, useChoice, type Choose } from './ui'
+import { GROUP_LABEL, capacityText, eligibilityText, g, planLetter, planState, type View } from './view'
 
 export interface DayProps {
   view: View
   day: number
   edit: (change: (plan: Plan) => Plan) => void
   openOffering: (oid: number) => void
-  openPerson: (pid: number) => void
   openCondition: (oid: number) => void
 }
 
-export function Day({ view, day, edit, openOffering, openPerson, openCondition }: DayProps) {
-  const [filter, setFilter] = useState<Filter>('all')
-  const [query, setQuery] = useState('')
-  const [showAll, setShowAll] = useState(false)
+const TONE = { ok: 'var(--ok)', wait: 'var(--wait)', muted: 'var(--muted)' }
+
+type Step = { kind: 'pick' } | { kind: 'role'; oid: number } | { kind: 'who'; oid: number } | null
+
+const COACH = [
+  { target: 'question', text: 'Odpowiadasz na proste pytania: na co chcesz iść, z kim i co, gdyby nie wyszło.' },
+  { target: 'question', text: 'Plan B jest tylko na wypadek, gdyby Plan A nie wyszedł (np. nie idą Twoi znajomi). Nie musisz go mieć.' },
+]
+
+/** Adds a plan. A multi-day activity that collides with plans I already have is asked about right away. False if cancelled. */
+async function addPlan(view: View, oid: number, edit: DayProps['edit'], choose: Choose): Promise<boolean> {
+  const o = view.domainOffering(oid)
+  const name = view.activityOf(oid).name
+  const busy = o.days.filter((d) => (view.myPlan.rankings[d] ?? []).length > 0)
+  if (o.days.length < 2 || !busy.length) {
+    edit((p) => addPick(p, o))
+    return true
+  }
+  const have = busy.map((d) => `dzień ${view.dayNo(d)} – ${view.activityOf(view.myPlan.rankings[d]![0]!).name}`).join(', ')
+  const i = await choose(`${name} trwa ${view.daysText(view.offering(oid))}. Na te dni masz już: ${have}.`, [
+    `${name} jako Plan A we wszystkie te dni`,
+    'Tylko jako plan zapasowy',
+    'Anuluj',
+  ])
+  if (i === 0) edit((p) => keepOnAllDays(addPick(p, o), o))
+  if (i === 1) edit((p) => addPick(p, o))
+  return i === 0 || i === 1
+}
+
+export function Day({ view, day, edit, openOffering, openCondition }: DayProps) {
+  const [choiceSheet, choose] = useChoice()
+  const [step, setStep] = useState<Step>(null)
   const me = view.me.id
   const ranking = view.myPlan.rankings[day] ?? []
-  const current = view.res.currentChoice(me, day)
-  const status = view.status(me, day)
-  const conflicts = view.res.conflicts(me).filter((oid) => view.offering(oid).dayIds.includes(day))
-
-  const found = query.trim()
-    ? view.state.people.filter((p) => p.id !== me && `${p.firstName} ${p.lastName ?? ''}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 3)
-    : []
-  const others = view
+  const options = view
     .offeringsOn(day)
-    .filter((o) => !ranking.includes(o.id) && (showAll || view.eligibleForMe(o)))
-    .sort((a, b) => view.goers(b.id, day, filter).length - view.goers(a.id, day, filter).length)
-  const undecided = view.undecided(day, filter)
+    .filter((o) => view.eligibleForMe(o) && !ranking.includes(o.id))
+    .sort((a, b) => view.goers(b.id, day).length - view.goers(a.id, day).length)
+  const active: Step = step ?? (ranking.length ? null : { kind: 'pick' })
+  const mentor = isMentor(view.me)
+  const bothRoles = (oid: number) => openGroups(view.me, view.domainOffering(oid)).length === 2
+  const setRole = (oid: number, role: MentorRole) => edit((p) => setMentorRole(p, oid, role))
 
-  async function setStatus(s: StoredDayStatus) {
-    const top = ranking[0]
-    if (s !== 'wondering' && top != null && current !== top) {
-      const ok = await confirmAsync(`„${view.activityOf(top).name}” to Twoje #1, ale jego warunek teraz nie jest spełniony. Zdecydowany oznacza, że idziesz na #1 mimo to. OK?`)
-      if (!ok) return
+  const frame = (content: ReactNode) => (
+    <>
+      {content}
+      {choiceSheet}
+      <Coach id="day" steps={COACH} />
+    </>
+  )
+
+  if (active?.kind === 'role') {
+    const a = view.activityOf(active.oid)
+    const pick = (role: MentorRole) => {
+      setRole(active.oid, role)
+      setStep({ kind: 'who', oid: active.oid })
     }
-    edit((p) => setDayStatus(p, day, s, view.offerings))
+    return frame(
+      <div className="qbox" data-coach="question">
+        <Thumb activity={a} size={72} />
+        <div className="qbig">{a.name} – bierzesz udział jako mentor?</div>
+        <div className="small muted">Każda grupa ma w aplikacji wydarzenia osobny limit miejsc.</div>
+        <div style={{ display: 'grid', gap: 8, marginTop: 14, width: '100%' }}>
+          <button className="btn" onClick={() => pick('in')}>Tak – mentor uczestniczący</button>
+          <button className="btn ghost" onClick={() => pick('out')}>Nie – mentor nieuczestniczący</button>
+        </div>
+      </div>,
+    )
   }
 
-  return (
+  if (active?.kind === 'who') {
+    const a = view.activityOf(active.oid)
+    return frame(
+      <div className="qbox" data-coach="question">
+        <Thumb activity={a} size={72} />
+        <div className="qbig">{a.name} – idziesz niezależnie od innych?</div>
+        <GoingWith view={view} oid={active.oid} day={day} />
+        <div style={{ display: 'grid', gap: 8, marginTop: 14, width: '100%' }}>
+          <button className="btn" onClick={() => setStep(null)}>Tak, idę</button>
+          <button className="btn ghost" onClick={() => { openCondition(active.oid); setStep(null) }}>Jeśli idzie…</button>
+        </div>
+      </div>,
+    )
+  }
+
+  if (active?.kind === 'pick') {
+    const prev = ranking.length ? view.activityOf(ranking[ranking.length - 1]!).name : null
+    return frame(
+      <>
+        <div className="qbox" data-coach="question">
+          <div className="small muted">Dzień {view.dayNo(day)}{prev && ` · Plan ${planLetter(ranking.length)}`}</div>
+          <div className="qbig">{prev ? `A gdyby ${prev} nie wyszło?` : 'Na co chcesz iść?'}</div>
+        </div>
+        <div className="tiles">
+          {options.map((o) => (
+            <button key={o.id} className="tile" onClick={async () => { if (await addPlan(view, o.id, edit, choose)) setStep({ kind: mentor && bothRoles(o.id) ? 'role' : 'who', oid: o.id }) }}>
+              <Thumb activity={view.activityOf(o.id)} size={64} />
+              <span className="b">{view.activityOf(o.id).name}</span>
+              <span className="small muted">{[view.daysText(o), eligibilityText(o), capacityText(o.capacity, openGroups(view.me, view.domainOffering(o.id))), o.highDemand ? '🔥' : ''].filter(Boolean).join(' · ')}</span>
+              <GoingWith view={view} oid={o.id} day={day} />
+            </button>
+          ))}
+        </div>
+        {!options.length && <div className="card pad small muted">Nie ma więcej aktywności na ten dzień.</div>}
+        {ranking.length > 0 && (
+          <div className="pad">
+            <button className="btn ghost" style={{ width: '100%' }} onClick={() => setStep(null)}>{prev ? 'Nie potrzebuję planu zapasowego' : 'Wróć'}</button>
+          </div>
+        )}
+      </>,
+    )
+  }
+
+  return frame(
     <>
-      <div className="now">
-        <div className="small muted">Gdyby zapisy były teraz, poszedłbyś na:</div>
-        {current != null ? (
-          <div className="row" style={{ marginTop: 6 }} onClick={() => openOffering(current)}>
+      <NowCard view={view} day={day} edit={edit} />
+      <Conflicts view={view} day={day} edit={edit} />
+      <div className="h3" data-coach="question">Twoje plany na dzień {view.dayNo(day)}</div>
+      {ranking.map((oid, i) => {
+        const st = planState(view, day, oid)
+        const a = view.activityOf(oid)
+        return (
+          <div key={oid}>
+            {i > 0 && <div className="chain-arrow">↓ a jeśli nie wyjdzie</div>}
+            <div className={`card pad plan-card ${st.tone === 'ok' ? 'on' : ''}`}>
+              <div className="row" onClick={() => openOffering(oid)} style={{ cursor: 'pointer' }}>
+                <span className={`letter ${st.tone === 'ok' ? 'on' : ''}`}>{planLetter(i)}</span>
+                <Thumb activity={a} size={40} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="b">{a.name} {view.daysText(view.offering(oid)) && <span className="badge">{view.daysText(view.offering(oid))}</span>}</div>
+                  {st.text && <div className="small" style={{ color: TONE[st.tone] }}>{st.text}</div>}
+                </div>
+              </div>
+              {mentor && bothRoles(oid) && (
+                <button className="linkb small" style={{ marginTop: 6 }} onClick={() => setRole(oid, view.groupOf(me, oid) === 'mentorOut' ? 'in' : 'out')}>
+                  👤 {GROUP_LABEL[view.groupOf(me, oid)]} ⇄
+                </button>
+              )}
+              {mentor && !bothRoles(oid) && <div className="small muted" style={{ marginTop: 6 }}>👤 {GROUP_LABEL[view.groupOf(me, oid)]} (jedyna możliwość)</div>}
+              <div className="row small" style={{ marginTop: 8, gap: 14 }}>
+                <button className="linkb" onClick={() => openCondition(oid)}>🤝 {view.myPlan.conditions[oid] ? 'zmień, z kim' : 'z kim?'}</button>
+                {i > 0 && <button className="linkb" onClick={() => edit((p) => movePick(p, day, i, 0))}>zrób Planem A</button>}
+                <span className="sp" />
+                <button className="linkb danger" onClick={() => edit((p) => removePick(p, view.domainOffering(oid)))}>usuń</button>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+      {options.length > 0 && (
+        <div className="pad">
+          <button className="btn ghost" style={{ width: '100%' }} onClick={() => setStep({ kind: 'pick' })}>+ Plan {planLetter(ranking.length)} – gdyby nie wyszło</button>
+        </div>
+      )}
+    </>,
+  )
+}
+
+function NowCard({ view, day, edit }: { view: View; day: number; edit: DayProps['edit'] }) {
+  const me = view.me.id
+  const current = view.res.currentChoice(me, day)
+  const registered = view.status(me, day) === 'registered'
+  // Registering is for what I'm going to now, so it becomes Plan A.
+  const toggle = (cur: number) =>
+    edit((p) => {
+      if (registered) return setDayStatus(p, day, 'wondering', view.offerings)
+      const i = (p.rankings[day] ?? []).indexOf(cur)
+      return setDayStatus(i > 0 ? movePick(p, day, i, 0) : p, day, 'registered', view.offerings)
+    })
+  return (
+    <div className="now">
+      <div className="small muted">Dzień {view.dayNo(day)} · idziesz na:</div>
+      {current != null ? (
+        <>
+          <div className="row" style={{ marginTop: 6 }}>
             <Thumb activity={view.activityOf(current)} />
             <div>
               <div className="b" style={{ fontSize: 18 }}>{view.activityOf(current).name}</div>
-              <div className="small muted">z Tobą: {view.goers(current, day).length - 1} os.{view.daysText(view.offering(current)) && ` · ${view.daysText(view.offering(current))}`}</div>
+              <div className="small muted">z Tobą: {view.goers(current, day).length - 1} os.</div>
             </div>
           </div>
-        ) : (
-          <div className="b" style={{ marginTop: 4 }}>{ranking.length ? '— żaden warunek nie jest teraz spełniony' : '— dodaj coś do rankingu poniżej'}</div>
-        )}
-        {ranking.length > 0 && (
-          <div className="status">
-            {(['wondering', 'decided', 'registered'] as const).map((s) => (
-              <button key={s} className={status === s ? 'on' : ''} onClick={() => setStatus(s)}>{STATUS_ICON[s]} {STATUS_LABEL[s]}</button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {conflicts.map((oid) => {
-        const o = view.offering(oid)
-        const name = view.activityOf(oid).name
-        // Days where something ranked higher wins instead of this multi-day pick.
-        const preferred = o.dayIds.flatMap((d) => {
-          const c = view.res.currentChoice(me, d)
-          return c != null && c !== oid ? [`dzień ${view.dayNo(d)}: ${view.activityOf(c).name}`] : []
-        })
-        return (
-          <div key={oid} className="warn">
-            ⚠️ <b>{name}</b> trwa {view.daysText(o)}, ale wolisz coś innego ({preferred.join(', ')}). Dopóki nie wybierzesz, {name} się nie liczy.
-            <div className="row" style={{ marginTop: 8 }}>
-              <button className="btn sm" onClick={() => edit((p) => keepOnAllDays(p, view.domainOffering(oid)))}>{name} we wszystkie dni</button>
-              <button className="btn sm ghost" onClick={() => edit((p) => removePick(p, view.domainOffering(oid)))}>Usuń {name}</button>
-            </div>
-          </div>
-        )
-      })}
-
-      <div className="h3">Twój ranking ({ranking.length})</div>
-      <Ranking view={view} day={day} filter={filter} edit={edit} openOffering={openOffering} openCondition={openCondition} />
-
-      <div className="h3">Pozostałe opcje</div>
-      <FilterChips value={filter} onChange={setFilter} />
-      <div style={{ padding: '0 16px' }}>
-        <input className="input" placeholder="Gdzie idzie… (wpisz imię)" value={query} onChange={(e) => setQuery(e.target.value)} />
-      </div>
-      {found.map((p) => {
-        const c = view.res.currentChoice(p.id, day)
-        const n = view.planOf(p.id).rankings[day]?.length ?? 0
-        return (
-          <div key={p.id} className="find" onClick={() => openPerson(p.id)}>
-            <Avatar person={p} />
-            <span><b>{p.firstName}</b> → {c != null ? `${view.activityOf(c).name} ${STATUS_ICON[view.status(p.id, day)]}` : 'jeszcze nic'}{n > 1 && <span className="muted"> (rozważa {n})</span>}</span>
-          </div>
-        )
-      })}
-      {others.map((o) => {
-        const activity = view.activityOf(o.id)
-        const eligible = view.eligibleForMe(o)
-        const highlighted = found.some((p) => view.res.currentChoice(p.id, day) === o.id)
-        return (
-          <div key={o.id} className={`opt ${highlighted ? 'hl' : ''}`} style={eligible ? undefined : { opacity: 0.5 }}>
-            <Thumb activity={activity} />
-            <div style={{ flex: 1, minWidth: 0 }} onClick={() => openOffering(o.id)}>
-              <div className="b">{activity.name}</div>
-              <div className="small muted">
-                {[view.daysText(o), eligibilityText(o), o.capacity ? `max ${o.capacity}` : '', o.highDemand ? '🔥' : ''].filter(Boolean).join(' · ')}
-              </div>
-              <GoersLine view={view} oid={o.id} day={day} filter={filter} />
-            </div>
-            {eligible && (
-              <div className="add">
-                <button className="btn sm" onClick={() => edit((p) => addPick(p, view.domainOffering(o.id)))}>+ Dodaj</button>
-                <button className="btn sm ghost" onClick={() => { edit((p) => addPick(p, view.domainOffering(o.id))); openCondition(o.id) }}>+ Jeśli…</button>
-              </div>
-            )}
-          </div>
-        )
-      })}
-      {!others.length && <div className="card pad muted small">Wszystko jest już w Twoim rankingu.</div>}
-      <div className="card pad small">
-        <b>🙋 Jeszcze nic nie wybrali ({undecided.length}):</b> {undecided.map((p) => (p.id === me ? 'Ty' : p.firstName)).join(', ') || '—'}
-      </div>
-      <div style={{ textAlign: 'center' }}>
-        <button className="chip" onClick={() => setShowAll(!showAll)}>{showAll ? 'Ukryj niedostępne' : 'Pokaż też niedostępne'}</button>
-      </div>
-    </>
+          <button className={`reg ${registered ? 'on' : ''}`} onClick={() => toggle(current)}>
+            <span className="box">{registered ? '✓' : ''}</span>
+            {g(view.me.gender, 'Zapisałem', 'Zapisałam')} się w aplikacji wydarzenia
+          </button>
+        </>
+      ) : (
+        <div className="b" style={{ marginTop: 4 }}>— żaden plan jeszcze nie wychodzi</div>
+      )}
+    </div>
   )
+}
+
+function Conflicts({ view, day, edit }: { view: View; day: number; edit: DayProps['edit'] }) {
+  const me = view.me.id
+  return view.res
+    .conflicts(me)
+    .filter((oid) => view.offering(oid).dayIds.includes(day))
+    .map((oid) => {
+      const o = view.offering(oid)
+      const name = view.activityOf(oid).name
+      const other = o.dayIds.map((d) => view.res.currentChoice(me, d)).find((c) => c != null && c !== oid)
+      const otherName = other != null ? view.activityOf(other).name : null
+      return (
+        <div key={oid} className="warn">
+          ⚠️ {name} trwa {view.daysText(o)}, a w jeden z tych dni wolisz {otherName ?? 'coś innego'}. Co wybierasz?
+          <div className="row" style={{ marginTop: 8 }}>
+            <button className="btn sm" onClick={() => edit((p) => keepOnAllDays(p, view.domainOffering(oid)))}>{name}</button>
+            <button className="btn sm ghost" onClick={() => edit((p) => removePick(p, view.domainOffering(oid)))}>{otherName ?? `Usuń ${name}`}</button>
+          </div>
+        </div>
+      )
+    })
 }

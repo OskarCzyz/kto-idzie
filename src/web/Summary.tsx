@@ -1,6 +1,6 @@
 import { Thumb } from './ui'
 import type { Bracket } from '../domain'
-import { STATUS_ICON, STATUS_LABEL, waveRange, type View } from './view'
+import { STATUS_ICON, planLetter, statusLabel, waveRange, type View } from './view'
 
 export function Summary({ view, goToDay }: { view: View; goToDay: (index: number) => void }) {
   const me = view.me.id
@@ -30,18 +30,18 @@ export function Summary({ view, goToDay }: { view: View; goToDay: (index: number
             <div className="row">
               <span className="small muted">Dzień {d.dayNo}</span>
               <span className="sp" />
-              <span className="small">{STATUS_ICON[s]} {STATUS_LABEL[s]}</span>
+              <span className="small">{STATUS_ICON[s]} {statusLabel(s, view.me.gender)}</span>
             </div>
             <div className="row" style={{ marginTop: 6 }}>
               {current != null ? <Thumb activity={view.activityOf(current)} size={36} /> : <span className="thumb" style={{ width: 36, height: 36 }}>❔</span>}
               <div>
-                <div className="b">{current != null ? view.activityOf(current).name : ranking.length ? 'żaden warunek nie jest spełniony' : 'nie wybrano'}</div>
+                <div className="b">{current != null ? view.activityOf(current).name : ranking.length ? 'żaden plan jeszcze nie wychodzi' : 'nie wybrano'}</div>
                 {current != null && <div className="small muted">z Tobą: {view.goers(current, d.id).length - 1} os.</div>}
               </div>
             </div>
             {(ranking.length > 1 || (ranking.length > 0 && ranking[0] !== current)) && (
               <div className="small muted" style={{ marginTop: 6 }}>
-                Ranking: {ranking.map((oid, j) => `${j + 1}. ${view.activityOf(oid).name}${view.myPlan.conditions[oid] ? ' 🤝' : ''}`).join(' · ')}
+                Plany: {ranking.map((oid, j) => `${planLetter(j)}. ${view.activityOf(oid).name}${view.myPlan.conditions[oid] ? ' 🤝' : ''}`).join(' · ')}
               </div>
             )}
           </div>

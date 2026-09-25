@@ -1,5 +1,5 @@
 // Types of the HTTP API contract, shared by the Worker and the SPA.
-import type { Bracket, Gender, Plan } from '../domain'
+import type { Bracket, Gender, Plan, SignupGroup } from '../domain'
 
 export interface Me {
   id: number
@@ -37,21 +37,21 @@ export interface CampInput {
 export interface Activity {
   id: number
   name: string
-  description: string
   logoUrl: string | null // one logo per activity, like the BCC app's activity tiles
 }
 
 export interface ActivityInput {
   name: string
-  description: string
 }
+
+/** Places per signup group, across all youth groups at the camp; null = unlimited. */
+export type Capacity = Record<SignupGroup, number | null>
 
 export interface OfferingInput {
   activityId: number
   dayIds: number[]
   gender: Gender | null
-  brackets: Bracket[] | null
-  capacity: number | null
+  capacity: Capacity
   highDemand: boolean
 }
 

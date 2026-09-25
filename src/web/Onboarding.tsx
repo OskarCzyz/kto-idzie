@@ -33,6 +33,7 @@ export function Onboarding({ me, onDone }: { me: Me; onDone: (me: Me) => void })
         ))}
       </div>
       <div className="h3">Grupa wiekowa</div>
+      <p className="small muted" style={{ margin: '-4px 16px 8px' }}>U15 i U18 zapisują się na aktywności jako mentee, O18 jako mentorzy.</p>
       <div className="card pad choice-grid three">
         {(['U15', 'U18', 'O18'] as const).map((b) => (
           <button key={b} className={`choice ${bracket === b ? 'on' : ''}`} onClick={() => setBracket(b)}>

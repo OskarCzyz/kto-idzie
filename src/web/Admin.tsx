@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Activity, Camp, CampInput, OfferingDto, OfferingInput, ParticipantDto } from '../shared/api'
-import type { Bracket, Gender } from '../domain'
+import type { Bracket, Gender, SignupGroup } from '../domain'
 import { api } from './api'
 import { Thumb } from './ui'
 import { confirmAsync } from './telegram'
+import { GROUP_LABEL, capacityText } from './view'
 
 const BRACKETS: Bracket[] = ['U15', 'U18', 'O18']
+const GROUPS: SignupGroup[] = ['mentee', 'mentorIn', 'mentorOut']
 type Tab = 'camp' | 'activities' | 'participants'
 const TABS: [Tab, string][] = [['camp', 'Obóz'], ['activities', 'Aktywności'], ['participants', 'Uczestnicy']]
 
@@ -105,17 +107,53 @@ function CloseCamp({ onClosed }: { onClosed: () => void }) {
 }
 
 // ---------------- activities + their offerings ("terminy") in one form
-type Slot = Omit<OfferingInput, 'activityId'> & { id?: number } // one offering of the activity, being edited
+/**
+ * One "termin" as the organizer edits it. Usually the activity can be picked on any of its days,
+ * which is one single-day offering per day; `multiDay` makes it one offering spanning all its days.
+ * `ids` are the existing offerings this slot was built from.
+ */
+type Slot = Omit<OfferingInput, 'activityId'> & { multiDay: boolean; ids: number[] }
 
-const emptySlot = (): Slot => ({ dayIds: [], gender: null, brackets: null, capacity: null, highDemand: false })
+const emptySlot = (camp: Camp | null): Slot => ({ dayIds: camp?.days.map((d) => d.id) ?? [], multiDay: false, ids: [], gender: null, capacity: { mentee: null, mentorIn: null, mentorOut: null }, highDemand: false })
+
+/** Groups single-day offerings with the same audience and settings into one slot. */
+function toSlots(offerings: OfferingDto[]): Slot[] {
+  const slots: Slot[] = []
+  const byKey = new Map<string, Slot>()
+  for (const { id, activityId: _, ...o } of offerings) {
+    if (o.dayIds.length > 1) {
+      slots.push({ ...o, multiDay: true, ids: [id] })
+      continue
+    }
+    const key = JSON.stringify([o.gender, o.capacity.mentee, o.capacity.mentorIn, o.capacity.mentorOut, o.highDemand])
+    const slot = byKey.get(key)
+    if (slot) {
+      slot.dayIds.push(...o.dayIds)
+      slot.ids.push(id)
+    } else {
+      const fresh = { ...o, dayIds: [...o.dayIds], multiDay: false, ids: [id] }
+      byKey.set(key, fresh)
+      slots.push(fresh)
+    }
+  }
+  return slots
+}
+
+/** The offerings a slot stands for, each reusing an existing one where possible so picks survive. */
+function slotOfferings(slot: Slot, existing: OfferingDto[]): { id?: number; dayIds: number[] }[] {
+  const mine = existing.filter((o) => slot.ids.includes(o.id))
+  if (slot.multiDay) return [{ id: mine[0]?.id, dayIds: slot.dayIds }]
+  const free = mine.filter((o) => !slot.dayIds.some((d) => o.dayIds.length === 1 && o.dayIds[0] === d))
+  return slot.dayIds.map((d) => ({ id: mine.find((o) => o.dayIds.length === 1 && o.dayIds[0] === d)?.id ?? free.shift()?.id, dayIds: [d] }))
+}
 
 function slotText(camp: Camp, o: Slot) {
-  const nos = o.dayIds.map((id) => camp.days.find((d) => d.id === id)?.dayNo).filter(Boolean)
+  const nos = [...o.dayIds].map((id) => camp.days.find((d) => d.id === id)?.dayNo).filter(Boolean).sort()
+  const days = !nos.length ? 'bez dni' : o.multiDay ? (nos.length === camp.days.length ? 'cały obóz' : `trwa dni ${nos.join(', ')}`) : nos.length === camp.days.length && nos.length > 1 ? 'dowolny dzień' : `dzień ${nos.join(' lub ')}`
   return [
-    nos.length ? `dzień ${nos.join(', ')}` : 'bez dni',
+    days,
     o.gender === 'K' ? 'tylko dziewczyny' : o.gender === 'M' ? 'tylko chłopcy' : '',
-    o.brackets?.join('/') ?? '',
-    o.capacity ? `max ${o.capacity}` : 'bez limitu',
+    capacityText(o.capacity),
     o.highDemand ? '🔥' : '',
   ].filter(Boolean).join(' · ')
 }
@@ -144,7 +182,7 @@ function Activities({ camp, activities, reload }: { camp: Camp | null; activitie
             <div style={{ minWidth: 0 }}>
               <div className="b">{a.name}</div>
               {camp && of(a.id).length ? (
-                of(a.id).map((o) => <div key={o.id} className="small muted">{slotText(camp, o)}</div>)
+                toSlots(of(a.id)).map((s) => <div key={s.ids[0]} className="small muted">{slotText(camp, s)}</div>)
               ) : (
                 <div className="small muted">nie ma w tym obozie – dotknij, żeby dodać termin</div>
               )}
@@ -158,10 +196,9 @@ function Activities({ camp, activities, reload }: { camp: Camp | null; activitie
 
 function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null; activity?: Activity; offerings: OfferingDto[]; onDone: () => void }) {
   const [name, setName] = useState(activity?.name ?? '')
-  const [description, setDescription] = useState(activity?.description ?? '')
   const [logo, setLogo] = useState<File | null>(null) // picked but not uploaded yet
   const [removeLogo, setRemoveLogo] = useState(false)
-  const [slots, setSlots] = useState<Slot[]>(() => (offerings.length ? offerings.map(({ activityId: _, ...o }) => o) : camp ? [emptySlot()] : []))
+  const [slots, setSlots] = useState<Slot[]>(() => (offerings.length ? toSlots(offerings) : camp ? [emptySlot(camp)] : []))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const preview = logo ? URL.createObjectURL(logo) : removeLogo ? null : (activity?.logoUrl ?? null)
@@ -172,23 +209,28 @@ function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null
     setError(null)
     const valid = slots.filter((x) => x.dayIds.length)
     if (slots.length !== valid.length) return setError('Każdy termin musi mieć przynajmniej jeden dzień (albo go usuń).')
-    const removed = offerings.filter((o) => !slots.some((x) => x.id === o.id))
+    if (slots.some((x) => Object.values(x.capacity).every((n) => n === 0))) return setError('W każdym terminie przynajmniej jedna grupa musi móc się zapisać.')
+    const planned = slots.map((slot) => ({ slot, items: slotOfferings(slot, offerings) }))
+    const kept = new Set(planned.flatMap((p) => p.items.map((x) => x.id)))
+    const removed = offerings.filter((o) => !kept.has(o.id))
     if (removed.length && !(await confirmAsync(`Usunąć ${removed.length === 1 ? 'termin' : `${removed.length} terminy`}? Wybory uczestników na ${removed.length === 1 ? 'niego' : 'nie'} też znikną.`))) return
     setBusy(true)
     try {
       let id = activity?.id
-      if (id) await api(`/admin/activities/${id}`, { method: 'PUT', body: { name, description } })
-      else id = (await api<{ id: number }>('/admin/activities', { method: 'POST', body: { name, description } })).id
+      if (id) await api(`/admin/activities/${id}`, { method: 'PUT', body: { name } })
+      else id = (await api<{ id: number }>('/admin/activities', { method: 'POST', body: { name } })).id
       if (logo) {
         const fd = new FormData()
         fd.append('file', logo)
         await api(`/admin/activities/${id}/logo`, { method: 'PUT', body: fd })
       } else if (removeLogo) await api(`/admin/activities/${id}/logo`, { method: 'DELETE' })
       for (const o of removed) await api(`/admin/offerings/${o.id}`, { method: 'DELETE' })
-      for (const { id: oid, ...slot } of slots) {
-        const body: OfferingInput = { ...slot, activityId: id }
-        if (oid) await api(`/admin/offerings/${oid}`, { method: 'PUT', body })
-        else await api('/admin/offerings', { method: 'POST', body })
+      for (const { slot: { multiDay: _, ids: __, ...settings }, items } of planned) {
+        for (const { id: oid, dayIds } of items) {
+          const body: OfferingInput = { ...settings, dayIds, activityId: id }
+          if (oid) await api(`/admin/offerings/${oid}`, { method: 'PUT', body })
+          else await api('/admin/offerings', { method: 'POST', body })
+        }
       }
       onDone()
     } catch (e) {
@@ -215,18 +257,17 @@ function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null
           {preview && <button className="small danger" style={{ justifySelf: 'start' }} onClick={() => { setLogo(null); setRemoveLogo(true) }}>usuń logo</button>}
         </div>
       </div>
-      <label>Krótki opis<textarea className="input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} /></label>
 
       <div className="h3" style={{ margin: '6px 0 0' }}>Terminy</div>
       {!camp ? (
         <div className="small muted">Najpierw ustaw obóz (zakładka Obóz), wtedy dodasz dni.</div>
       ) : (
         <>
-          <div className="small muted">Kiedy i dla kogo. Kilka dni w jednym terminie = aktywność wielodniowa.</div>
+          <div className="small muted">Kiedy i dla kogo. Zaznaczone dni = można wybrać w dowolny z nich. Inne warunki (np. osobno dla dziewczyn) → kolejny termin.</div>
           {slots.map((slot, i) => (
-            <SlotEditor key={slot.id ?? `new-${i}`} camp={camp} slot={slot} onChange={(p) => setSlot(i, p)} onRemove={() => setSlots((ss) => ss.filter((_, j) => j !== i))} />
+            <SlotEditor key={slot.ids[0] ?? `new-${i}`} camp={camp} slot={slot} onChange={(p) => setSlot(i, p)} onRemove={() => setSlots((ss) => ss.filter((_, j) => j !== i))} />
           ))}
-          <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => setSlots((ss) => [...ss, emptySlot()])}>+ Dodaj termin</button>
+          <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => setSlots((ss) => [...ss, emptySlot(camp)])}>+ Dodaj termin</button>
         </>
       )}
 
@@ -243,11 +284,7 @@ function ActivityForm({ camp, activity, offerings, onDone }: { camp: Camp | null
 
 function SlotEditor({ camp, slot, onChange, onRemove }: { camp: Camp; slot: Slot; onChange: (p: Partial<Slot>) => void; onRemove: () => void }) {
   const toggleDay = (d: number) => onChange({ dayIds: slot.dayIds.includes(d) ? slot.dayIds.filter((x) => x !== d) : [...slot.dayIds, d] })
-  const toggleBracket = (b: Bracket) => {
-    const cur = slot.brackets ?? BRACKETS
-    const next = cur.includes(b) ? cur.filter((x) => x !== b) : [...cur, b]
-    onChange({ brackets: next.length === 0 || next.length === BRACKETS.length ? null : next })
-  }
+  const setCapacity = (k: SignupGroup, v: string) => onChange({ capacity: { ...slot.capacity, [k]: v ? Number(v) : null } })
   return (
     <div className="slot">
       <div className="row">
@@ -258,22 +295,29 @@ function SlotEditor({ camp, slot, onChange, onRemove }: { camp: Camp; slot: Slot
       <div className="row" style={{ flexWrap: 'wrap' }}>
         {camp.days.map((d) => <button key={d.id} className={`chip ${slot.dayIds.includes(d.id) ? 'on' : ''}`} onClick={() => toggleDay(d.id)}>Dzień {d.dayNo}</button>)}
       </div>
+      {slot.dayIds.length > 1 && (
+        <label className="row small">
+          <input type="checkbox" checked={slot.multiDay} onChange={(e) => onChange({ multiDay: e.target.checked })} />
+          Wielodniowa – trwa wszystkie zaznaczone dni naraz
+        </label>
+      )}
       <div className="small muted">Dla kogo</div>
       <div className="row" style={{ flexWrap: 'wrap' }}>
         {([[null, 'Wszyscy'], ['M', 'Chłopcy'], ['K', 'Dziewczyny']] as [Gender | null, string][]).map(([g, l]) => (
           <button key={l} className={`chip ${slot.gender === g ? 'on' : ''}`} onClick={() => onChange({ gender: g })}>{l}</button>
         ))}
-        <span style={{ width: 6 }} />
-        {BRACKETS.map((b) => <button key={b} className={`chip ${!slot.brackets || slot.brackets.includes(b) ? 'on' : ''}`} onClick={() => toggleBracket(b)}>{b}</button>)}
       </div>
-      <div className="row">
-        <label style={{ flex: 1 }}>Limit miejsc
-          <input className="input" type="number" min={1} placeholder="bez limitu" value={slot.capacity ?? ''} onChange={(e) => onChange({ capacity: e.target.value ? Number(e.target.value) : null })} />
-        </label>
-        <label className="row" style={{ paddingTop: 18 }}>
-          <input type="checkbox" checked={slot.highDemand} onChange={(e) => onChange({ highDemand: e.target.checked })} /> 🔥 duże zainteresowanie
-        </label>
+      <div className="small muted">Limit miejsc w każdej grupie zapisów: puste = bez limitu, 0 = ta grupa nie może się zapisać. Mentee to U15/U18, mentorzy to O18.</div>
+      <div className="caps">
+        {GROUPS.map((k) => (
+          <label key={k}>{GROUP_LABEL[k]}
+            <input className="input" type="number" min={0} placeholder="bez limitu" value={slot.capacity[k] ?? ''} onChange={(e) => setCapacity(k, e.target.value)} />
+          </label>
+        ))}
       </div>
+      <label className="row">
+        <input type="checkbox" checked={slot.highDemand} onChange={(e) => onChange({ highDemand: e.target.checked })} /> 🔥 duże zainteresowanie
+      </label>
     </div>
   )
 }

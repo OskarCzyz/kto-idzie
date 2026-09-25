@@ -10,7 +10,8 @@ export interface Offering {
   id: OfferingId
   days: DayId[]
   gender: Gender | null
-  brackets: Bracket[] | null
+  /** Signup groups with capacity 0: nobody can sign up in them. */
+  closed: SignupGroup[]
 }
 
 export interface Participant {
@@ -23,7 +24,14 @@ export type Condition =
   | { kind: 'people'; people: ParticipantId[] }
   | { kind: 'min'; min: number } // at least N others of the participant's own gender
 
-export type DayStatus = 'undecided' | 'wondering' | 'decided' | 'registered'
+/**
+ * Who a participant signs up as; each group has its own capacity. U15/U18 are always mentees,
+ * O18 are always mentors and choose per pick whether they take part in the activity.
+ */
+export type SignupGroup = 'mentee' | 'mentorIn' | 'mentorOut'
+export type MentorRole = 'in' | 'out'
+
+export type DayStatus = 'undecided' | 'wondering' | 'registered'
 export type StoredDayStatus = Exclude<DayStatus, 'undecided'>
 
 export interface Plan {
@@ -31,10 +39,28 @@ export interface Plan {
   rankings: Record<DayId, OfferingId[]>
   conditions: Record<OfferingId, Condition>
   statuses: Record<DayId, StoredDayStatus>
+  /** O18 only: taking part in the activity (in) or not (out). Missing = in. */
+  mentorRoles: Record<OfferingId, MentorRole>
+}
+
+export const isMentor = (p: Pick<Participant, 'bracket'>) => p.bracket === 'O18'
+
+/** The signup groups the participant could register in for the offering. */
+export function openGroups(p: Pick<Participant, 'bracket'>, o: Pick<Offering, 'closed'>): SignupGroup[] {
+  const mine: SignupGroup[] = isMentor(p) ? ['mentorIn', 'mentorOut'] : ['mentee']
+  return mine.filter((g) => !o.closed.includes(g))
 }
 
 export function eligible(p: Participant, o: Offering): boolean {
-  return (!o.gender || o.gender === p.gender) && (!o.brackets || o.brackets.includes(p.bracket))
+  return (!o.gender || o.gender === p.gender) && openGroups(p, o).length > 0
+}
+
+export const closedGroups = (capacity: Record<SignupGroup, number | null>): SignupGroup[] =>
+  (Object.keys(capacity) as SignupGroup[]).filter((g) => capacity[g] === 0)
+
+export function signupGroup(p: Pick<Participant, 'bracket'>, plan: Plan, offering: OfferingId): SignupGroup {
+  if (!isMentor(p)) return 'mentee'
+  return plan.mentorRoles[offering] === 'out' ? 'mentorOut' : 'mentorIn'
 }
 
 export function dayStatus(plan: Plan, day: DayId): DayStatus {
@@ -99,7 +125,7 @@ export function resolve(input: { participants: Participant[]; offerings: Offerin
         const status = dayStatus(plan, day)
         mine.set(
           day,
-          status === 'decided' || status === 'registered'
+          status === 'registered'
             ? (ranking[0] ?? null)
             : (ranking.find(
                 (oid) => !conflicted.get(pid)!.has(oid) && !dropped.get(pid)!.has(oid) && conditionHolds(plan, oid, cur),

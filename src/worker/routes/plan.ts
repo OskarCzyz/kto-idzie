@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
-import { normalizePlan, type Condition, type Offering, type Plan, type StoredDayStatus } from '../../domain'
+import { closedGroups, normalizePlan, type Condition, type MentorRole, type Offering, type Plan, type StoredDayStatus } from '../../domain'
 import type { CampState, OfferingDto, PersonDto } from '../../shared/api'
 import type { AppEnv, ParticipantRow } from '../auth'
 import { activeCamp, listActivities, listOfferings } from '../db'
 
-export const toDomainOffering = (o: OfferingDto): Offering => ({ id: o.id, days: o.dayIds, gender: o.gender, brackets: o.brackets })
+export const toDomainOffering = (o: OfferingDto): Offering => ({ id: o.id, days: o.dayIds, gender: o.gender, closed: closedGroups(o.capacity) })
 
 async function loadPeople(db: D1Database): Promise<PersonDto[]> {
   const { results } = await db
@@ -19,7 +19,7 @@ async function loadPlans(db: D1Database, campId: number): Promise<Plan[]> {
   const [ranks, statuses] = await db.batch([
     db
       .prepare(
-        `SELECT p.participant_id, p.offering_id, p.cond_people, p.cond_min, r.camp_day_id, r.position
+        `SELECT p.participant_id, p.offering_id, p.cond_people, p.cond_min, p.mentor_role, r.camp_day_id, r.position
          FROM pick p JOIN pick_rank r ON r.pick_id = p.id JOIN camp_day d ON d.id = r.camp_day_id
          WHERE d.camp_id = ?1 ORDER BY p.participant_id, r.camp_day_id, r.position`,
       )
@@ -29,15 +29,16 @@ async function loadPlans(db: D1Database, campId: number): Promise<Plan[]> {
   const plans = new Map<number, Plan>()
   const planOf = (pid: number) => {
     let p = plans.get(pid)
-    if (!p) plans.set(pid, (p = { participantId: pid, rankings: {}, conditions: {}, statuses: {} }))
+    if (!p) plans.set(pid, (p = { participantId: pid, rankings: {}, conditions: {}, statuses: {}, mentorRoles: {} }))
     return p
   }
-  type RankRow = { participant_id: number; offering_id: number; cond_people: string | null; cond_min: number | null; camp_day_id: number }
+  type RankRow = { participant_id: number; offering_id: number; cond_people: string | null; cond_min: number | null; mentor_role: MentorRole | null; camp_day_id: number }
   for (const r of ranks!.results as RankRow[]) {
     const p = planOf(r.participant_id)
     ;(p.rankings[r.camp_day_id] ??= []).push(r.offering_id)
     if (r.cond_people) p.conditions[r.offering_id] = { kind: 'people', people: JSON.parse(r.cond_people) as number[] }
     else if (r.cond_min != null) p.conditions[r.offering_id] = { kind: 'min', min: r.cond_min }
+    if (r.mentor_role) p.mentorRoles[r.offering_id] = r.mentor_role
   }
   for (const s of statuses!.results as { participant_id: number; camp_day_id: number; status: StoredDayStatus }[]) {
     planOf(s.participant_id).statuses[s.camp_day_id] = s.status
@@ -65,7 +66,7 @@ export const plan = new Hono<AppEnv>()
     const [offerings, people] = await Promise.all([listOfferings(db, camp.id), loadPeople(db)])
     const body = await c.req.json<Plan>()
     const clean = normalizePlan(
-      { participantId: me.id, rankings: body.rankings ?? {}, conditions: body.conditions ?? {}, statuses: body.statuses ?? {} },
+      { participantId: me.id, rankings: body.rankings ?? {}, conditions: body.conditions ?? {}, statuses: body.statuses ?? {}, mentorRoles: body.mentorRoles ?? {} },
       offerings.map(toDomainOffering),
       { id: me.id, gender: me.gender, bracket: me.bracket },
       new Set(people.map((p) => p.id)),
@@ -78,7 +79,9 @@ export const plan = new Hono<AppEnv>()
       db.prepare(`DELETE FROM pick WHERE participant_id = ?1 AND offering_id IN (SELECT id FROM offering WHERE camp_id = ?2)`).bind(me.id, camp.id),
       db.prepare(`DELETE FROM day_status WHERE participant_id = ? AND camp_day_id IN (${inDays})`).bind(me.id, ...dayIds),
       ...picked.map((oid) =>
-        db.prepare('INSERT INTO pick (participant_id, offering_id, cond_people, cond_min) VALUES (?1, ?2, ?3, ?4)').bind(me.id, oid, ...condCols(clean.conditions[oid])),
+        db
+          .prepare('INSERT INTO pick (participant_id, offering_id, cond_people, cond_min, mentor_role) VALUES (?1, ?2, ?3, ?4, ?5)')
+          .bind(me.id, oid, ...condCols(clean.conditions[oid]), clean.mentorRoles[oid] ?? null),
       ),
       ...Object.entries(clean.rankings).flatMap(([day, ranking]) =>
         ranking.map((oid, pos) =>

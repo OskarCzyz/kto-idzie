@@ -1,6 +1,6 @@
 // Pure, immutable editing operations on a participant's Plan.
-import type { Condition, DayId, Offering, OfferingId, Participant, ParticipantId, Plan, StoredDayStatus } from './index'
-import { eligible } from './index'
+import type { Condition, DayId, MentorRole, Offering, OfferingId, Participant, ParticipantId, Plan, StoredDayStatus } from './index'
+import { eligible, isMentor, openGroups } from './index'
 
 const withoutStatus = (statuses: Plan['statuses'], day: DayId) => {
   const { [day]: _, ...rest } = statuses
@@ -27,7 +27,12 @@ export function removePick(plan: Plan, offering: Offering): Plan {
     if (!rankings[d]!.length || before[0] === offering.id) statuses = withoutStatus(statuses, d)
   }
   const { [offering.id]: _, ...conditions } = plan.conditions
-  return { ...plan, rankings, conditions, statuses }
+  const { [offering.id]: __, ...mentorRoles } = plan.mentorRoles
+  return { ...plan, rankings, conditions, statuses, mentorRoles }
+}
+
+export function setMentorRole(plan: Plan, offeringId: OfferingId, role: MentorRole): Plan {
+  return { ...plan, mentorRoles: { ...plan.mentorRoles, [offeringId]: role } }
 }
 
 /** Moves the pick at index `from` to index `to` in one day's ranking. A new #1 means wondering again. */
@@ -46,7 +51,7 @@ export function setCondition(plan: Plan, offeringId: OfferingId, condition: Cond
 }
 
 /**
- * Wondering applies to one day. Decided/Registered apply to the day's #1 on every day it covers,
+ * Wondering applies to one day. Registered applies to the day's #1 on every day it covers,
  * moving it to the top there too.
  */
 export function setDayStatus(plan: Plan, day: DayId, status: StoredDayStatus, offerings: Offering[]): Plan {
@@ -103,7 +108,18 @@ export function normalizePlan(plan: Plan, offerings: Offering[], me: Participant
   const statuses: Plan['statuses'] = {}
   for (const [key, s] of Object.entries(plan.statuses)) {
     const d = Number(key)
-    if (rankings[d]?.length && (s === 'wondering' || s === 'decided' || s === 'registered')) statuses[d] = s
+    if (rankings[d]?.length && (s === 'wondering' || s === 'registered')) statuses[d] = s
   }
-  return { participantId: me.id, rankings, conditions, statuses }
+  const mentorRoles: Plan['mentorRoles'] = {}
+  if (isMentor(me)) {
+    for (const oid of picked) {
+      const asked = plan.mentorRoles?.[oid]
+      const open = openGroups(me, byId.get(oid)!)
+      // A role whose group is closed (capacity 0) switches to the other one.
+      if (!open.includes('mentorIn')) mentorRoles[oid] = 'out'
+      else if (asked === 'out' && open.includes('mentorOut')) mentorRoles[oid] = 'out'
+      else if (asked === 'in') mentorRoles[oid] = 'in'
+    }
+  }
+  return { participantId: me.id, rankings, conditions, statuses, mentorRoles }
 }

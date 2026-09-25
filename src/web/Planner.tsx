@@ -9,7 +9,7 @@ import { ConditionSheet, OfferingSheet, PersonSheet } from './sheets'
 import { Summary } from './Summary'
 import { confirmAsync } from './telegram'
 import { useCampState } from './useCampState'
-import { STATUS_ICON, makeView, waveStatus } from './view'
+import { STATUS_ICON, g, makeView, waveStatus } from './view'
 
 type Tab = 'days' | 'plan' | 'people'
 type SheetState = { type: 'offering'; oid: number } | { type: 'person'; pid: number } | { type: 'condition'; oid: number } | null
@@ -46,7 +46,7 @@ export function Planner({ me, onAdmin }: { me: Me; onAdmin?: () => void }) {
     const undoesRegistered = days.some(
       (d) => before.statuses[d.id] === 'registered' && (next.statuses[d.id] !== 'registered' || next.rankings[d.id]?.[0] !== before.rankings[d.id]?.[0]),
     )
-    if (undoesRegistered && !(await confirmAsync('Na ten dzień jesteś oznaczony jako ZAPISANY. Na pewno zmienić?'))) return
+    if (undoesRegistered && !(await confirmAsync(g(me.gender, 'Na ten dzień jesteś oznaczony jako ZAPISANY. Na pewno zmienić?', 'Na ten dzień jesteś oznaczona jako ZAPISANA. Na pewno zmienić?')))) return
     void savePlan(next)
   }
 
@@ -85,7 +85,6 @@ export function Planner({ me, onAdmin }: { me: Me; onAdmin?: () => void }) {
             day={day.id}
             edit={edit}
             openOffering={(oid) => setSheet({ type: 'offering', oid })}
-            openPerson={(pid) => setSheet({ type: 'person', pid })}
             openCondition={(oid) => setSheet({ type: 'condition', oid })}
           />
         </>

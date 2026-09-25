@@ -65,8 +65,8 @@ admin.get('/activities', async (c) => c.json(await listActivities(c.env.DB)))
 admin.post('/activities', async (c) => {
   const body = await c.req.json<ActivityInput>()
   if (!body.name?.trim()) return bad('name')
-  const row = await c.env.DB.prepare('INSERT INTO activity (name, description) VALUES (?1, ?2) RETURNING id')
-    .bind(body.name.trim(), body.description?.trim() ?? '')
+  const row = await c.env.DB.prepare('INSERT INTO activity (name) VALUES (?1) RETURNING id')
+    .bind(body.name.trim())
     .first<{ id: number }>()
   return c.json({ id: row!.id })
 })
@@ -74,8 +74,8 @@ admin.post('/activities', async (c) => {
 admin.put('/activities/:id', async (c) => {
   const body = await c.req.json<ActivityInput>()
   if (!body.name?.trim()) return bad('name')
-  await c.env.DB.prepare('UPDATE activity SET name = ?1, description = ?2 WHERE id = ?3')
-    .bind(body.name.trim(), body.description?.trim() ?? '', Number(c.req.param('id')))
+  await c.env.DB.prepare('UPDATE activity SET name = ?1 WHERE id = ?2')
+    .bind(body.name.trim(), Number(c.req.param('id')))
     .run()
   return c.json({ ok: true })
 })
@@ -115,8 +115,9 @@ admin.delete('/activities/:id/logo', async (c) => {
 async function validateOffering(c: { env: Env }, campId: number, body: OfferingInput): Promise<string | null> {
   if (!body.dayIds?.length) return 'days'
   if (body.gender !== null && body.gender !== 'M' && body.gender !== 'K') return 'gender'
-  if (body.brackets !== null && (!body.brackets.length || body.brackets.some((b) => !BRACKETS.includes(b)))) return 'brackets'
-  if (body.capacity !== null && !(Number.isInteger(body.capacity) && body.capacity > 0)) return 'capacity'
+  const caps = body.capacity ? [body.capacity.mentee, body.capacity.mentorIn, body.capacity.mentorOut] : []
+  if (caps.length !== 3 || caps.some((n) => n !== null && !(Number.isInteger(n) && n >= 0))) return 'capacity'
+  if (caps.every((n) => n === 0)) return 'capacity' // nobody could sign up
   const days = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM camp_day WHERE camp_id = ?1 AND id IN (${body.dayIds.map(() => '?').join(',')})`)
     .bind(campId, ...body.dayIds)
     .first<{ n: number }>()
@@ -138,8 +139,11 @@ admin.post('/offerings', async (c) => {
   if (err) return bad(err)
   const db = c.env.DB
   const row = await db
-    .prepare('INSERT INTO offering (camp_id, activity_id, gender, brackets, capacity, high_demand) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id')
-    .bind(camp.id, body.activityId, body.gender, body.brackets?.join(',') ?? null, body.capacity, body.highDemand ? 1 : 0)
+    .prepare(
+      `INSERT INTO offering (camp_id, activity_id, gender, capacity_mentee, capacity_mentor_in, capacity_mentor_out, high_demand)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id`,
+    )
+    .bind(camp.id, body.activityId, body.gender, body.capacity.mentee, body.capacity.mentorIn, body.capacity.mentorOut, body.highDemand ? 1 : 0)
     .first<{ id: number }>()
   await db.batch(body.dayIds.map((d) => db.prepare('INSERT INTO offering_day (offering_id, camp_day_id) VALUES (?1, ?2)').bind(row!.id, d)))
   return c.json({ id: row!.id })
@@ -153,17 +157,26 @@ admin.put('/offerings/:id', async (c) => {
   const err = await validateOffering(c, camp.id, body)
   if (err) return bad(err)
   const db = c.env.DB
-  const brackets = body.brackets?.join(',') ?? null
   const inDays = body.dayIds.map(() => '?').join(',')
   await db.batch([
-    db.prepare('UPDATE offering SET activity_id = ?1, gender = ?2, brackets = ?3, capacity = ?4, high_demand = ?5 WHERE id = ?6 AND camp_id = ?7')
-      .bind(body.activityId, body.gender, brackets, body.capacity, body.highDemand ? 1 : 0, id, camp.id),
+    db.prepare(
+      `UPDATE offering SET activity_id = ?1, gender = ?2, capacity_mentee = ?3, capacity_mentor_in = ?4, capacity_mentor_out = ?5, high_demand = ?6
+       WHERE id = ?7 AND camp_id = ?8`,
+    ).bind(body.activityId, body.gender, body.capacity.mentee, body.capacity.mentorIn, body.capacity.mentorOut, body.highDemand ? 1 : 0, id, camp.id),
     // Picks of participants who are no longer eligible go away.
+    db.prepare('DELETE FROM pick WHERE offering_id = ?1 AND ?2 IS NOT NULL AND participant_id IN (SELECT id FROM participant WHERE gender IS NOT ?2)')
+      .bind(id, body.gender),
+    // …and so do picks of a signup group that was closed (capacity 0).
     db.prepare(
       `DELETE FROM pick WHERE offering_id = ?1 AND participant_id IN (
-         SELECT id FROM participant
-         WHERE (?2 IS NOT NULL AND gender IS NOT ?2) OR (?3 IS NOT NULL AND instr(',' || ?3 || ',', ',' || bracket || ',') = 0))`,
-    ).bind(id, body.gender, brackets),
+         SELECT id FROM participant WHERE (bracket IS NOT 'O18' AND ?2 = 0) OR (bracket = 'O18' AND ?3 = 0 AND ?4 = 0))`,
+    ).bind(id, body.capacity.mentee, body.capacity.mentorIn, body.capacity.mentorOut),
+    // A mentor whose role was closed switches to the other one (NULL = taking part).
+    db.prepare(`UPDATE pick SET mentor_role = NULL WHERE offering_id = ?1 AND mentor_role = 'out' AND ?2 = 0`).bind(id, body.capacity.mentorOut),
+    db.prepare(
+      `UPDATE pick SET mentor_role = 'out' WHERE offering_id = ?1 AND ?2 = 0
+         AND participant_id IN (SELECT id FROM participant WHERE bracket = 'O18')`,
+    ).bind(id, body.capacity.mentorIn),
     // Days removed from the offering: drop them from rankings.
     db.prepare(`DELETE FROM pick_rank WHERE camp_day_id NOT IN (${inDays}) AND pick_id IN (SELECT id FROM pick WHERE offering_id = ?)`)
       .bind(...body.dayIds, id),
