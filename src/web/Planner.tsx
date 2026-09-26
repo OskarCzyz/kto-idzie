@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
+import { Activities } from './Activities'
 import type { Plan } from '../domain'
 import type { Me } from '../shared/api'
 import { Day } from './Day'
 import { Hero } from './Hero'
-import { CalendarIcon, PeopleIcon, PlanIcon } from './icons'
+import { CalendarIcon, GridIcon, PeopleIcon, PlanIcon } from './icons'
 import { People } from './People'
 import { ConditionSheet, OfferingSheet, PersonSheet } from './sheets'
 import { Summary } from './Summary'
@@ -11,8 +12,8 @@ import { confirmAsync } from './telegram'
 import { useCampState } from './useCampState'
 import { STATUS_ICON, g, makeView, waveStatus } from './view'
 
-type Tab = 'days' | 'plan' | 'people'
-type SheetState = { type: 'offering'; oid: number } | { type: 'person'; pid: number } | { type: 'condition'; oid: number } | null
+type Tab = 'days' | 'activities' | 'plan' | 'people'
+type SheetState = { type: 'offering'; oid: number; day?: number } | { type: 'person'; pid: number } | { type: 'condition'; oid: number } | null
 
 export function Planner({ me, onAdmin }: { me: Me; onAdmin?: () => void }) {
   const { state, savePlan, saveError } = useCampState(me.id)
@@ -89,11 +90,12 @@ export function Planner({ me, onAdmin }: { me: Me; onAdmin?: () => void }) {
           />
         </>
       )}
+      {tab === 'activities' && <Activities view={view} openOffering={(oid, d) => setSheet({ type: 'offering', oid, day: d })} />}
       {tab === 'plan' && <Summary view={view} goToDay={(i) => go('days', i)} />}
       {tab === 'people' && <People view={view} openPerson={(pid) => setSheet({ type: 'person', pid })} />}
 
       <nav className="bottomnav">
-        {([['days', <CalendarIcon key="c" />, 'Dni'], ['plan', <PlanIcon key="p" />, 'Mój plan'], ['people', <PeopleIcon key="u" />, 'Ludzie']] as const).map(([t, icon, label]) => (
+        {([['days', <CalendarIcon key="c" />, 'Dni'], ['activities', <GridIcon key="a" />, 'Aktywności'], ['plan', <PlanIcon key="p" />, 'Mój plan'], ['people', <PeopleIcon key="u" />, 'Ludzie']] as const).map(([t, icon, label]) => (
           <button key={t} className={tab === t ? 'on' : ''} onClick={() => go(t)}>
             {icon}
             <span>{label}</span>
@@ -101,7 +103,7 @@ export function Planner({ me, onAdmin }: { me: Me; onAdmin?: () => void }) {
         ))}
       </nav>
 
-      {sheet?.type === 'offering' && <OfferingSheet view={view} oid={sheet.oid} day={day.id} onClose={() => setSheet(null)} openPerson={(pid) => setSheet({ type: 'person', pid })} />}
+      {sheet?.type === 'offering' && <OfferingSheet view={view} oid={sheet.oid} day={sheet.day ?? day.id} onClose={() => setSheet(null)} openPerson={(pid) => setSheet({ type: 'person', pid })} />}
       {sheet?.type === 'person' && <PersonSheet view={view} pid={sheet.pid} onClose={() => setSheet(null)} />}
       {sheet?.type === 'condition' && <ConditionSheet view={view} oid={sheet.oid} day={view.offering(sheet.oid).dayIds.includes(day.id) ? day.id : view.offering(sheet.oid).dayIds[0]!} edit={edit} onClose={() => setSheet(null)} />}
       {saveError && <div className="toast">{saveError}</div>}
