@@ -36,8 +36,8 @@ async function loadPlans(db: D1Database, campId: number): Promise<Plan[]> {
   for (const r of ranks!.results as RankRow[]) {
     const p = planOf(r.participant_id)
     ;(p.rankings[r.camp_day_id] ??= []).push(r.offering_id)
-    if (r.cond_people) p.conditions[r.offering_id] = { kind: 'people', people: JSON.parse(r.cond_people) as number[] }
-    else if (r.cond_min != null) p.conditions[r.offering_id] = { kind: 'min', min: r.cond_min }
+    if (r.cond_people || r.cond_min != null)
+      p.conditions[r.offering_id] = { people: r.cond_people ? (JSON.parse(r.cond_people) as number[]) : [], min: r.cond_min }
     if (r.mentor_role) p.mentorRoles[r.offering_id] = r.mentor_role
   }
   for (const s of statuses!.results as { participant_id: number; camp_day_id: number; status: StoredDayStatus }[]) {
@@ -74,7 +74,7 @@ export const plan = new Hono<AppEnv>()
     const dayIds = camp.days.map((d) => d.id)
     const inDays = dayIds.map(() => '?').join(',')
     const picked = [...new Set(Object.values(clean.rankings).flat())]
-    const condCols = (c?: Condition) => [c?.kind === 'people' ? JSON.stringify(c.people) : null, c?.kind === 'min' ? c.min : null]
+    const condCols = (c?: Condition) => [c?.people.length ? JSON.stringify(c.people) : null, c?.min ?? null]
     await db.batch([
       db.prepare(`DELETE FROM pick WHERE participant_id = ?1 AND offering_id IN (SELECT id FROM offering WHERE camp_id = ?2)`).bind(me.id, camp.id),
       db.prepare(`DELETE FROM day_status WHERE participant_id = ? AND camp_day_id IN (${inDays})`).bind(me.id, ...dayIds),

@@ -99,11 +99,9 @@ export function normalizePlan(plan: Plan, offerings: Offering[], me: Participant
   for (const [key, c] of Object.entries(plan.conditions)) {
     const oid = Number(key)
     if (!picked.has(oid)) continue
-    if (c.kind === 'min' && Number.isInteger(c.min) && c.min >= 1 && c.min <= 100) conditions[oid] = { kind: 'min', min: c.min }
-    if (c.kind === 'people') {
-      const people = [...new Set(c.people)].filter((p) => p !== me.id && participantIds.has(p))
-      if (people.length) conditions[oid] = { kind: 'people', people }
-    }
+    const people = [...new Set(Array.isArray(c.people) ? c.people : [])].filter((p) => p !== me.id && participantIds.has(p))
+    const min = Number.isInteger(c.min) && c.min! >= 1 && c.min! <= 100 ? c.min : null
+    if (people.length || min != null) conditions[oid] = { people, min }
   }
   const statuses: Plan['statuses'] = {}
   for (const [key, s] of Object.entries(plan.statuses)) {

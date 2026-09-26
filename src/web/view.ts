@@ -94,12 +94,13 @@ export function makeView(state: CampState, meId: number) {
       return { mentees, mentors, missing: Math.max(0, Math.ceil(mentees / 3) - mentors) }
     },
     dayNo: (dayId: number) => state.camp.days.find((d) => d.id === dayId)?.dayNo ?? 0,
-    /** "jeśli idzie Tomek i Ola" / "jeśli idzie min. 3 chłopców" */
+    /** "jeśli idzie Tomek i Ola" / "jeśli idzie min. 3 chłopców" / "jeśli idzie Tomek i min. 3 chłopców" */
     conditionText(pid: number, oid: number): string | null {
       const c = planOf(pid).conditions[oid]
       if (!c) return null
-      if (c.kind === 'min') return `jeśli idzie min. ${c.min} ${people.get(pid)?.gender === 'K' ? 'dziewczyn' : 'chłopców'}`
-      return 'jeśli idzie ' + c.people.map((q) => (q === meId ? 'Ty' : (people.get(q)?.firstName ?? '?'))).join(' i ')
+      const who = c.people.map((q) => (q === meId ? 'Ty' : (people.get(q)?.firstName ?? '?'))).join(' i ')
+      const min = c.min != null ? `min. ${c.min} ${people.get(pid)?.gender === 'K' ? 'dziewczyn' : 'chłopców'}` : ''
+      return 'jeśli idzie ' + [who, min].filter(Boolean).join(' i ')
     },
   }
 }

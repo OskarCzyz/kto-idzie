@@ -13,13 +13,13 @@ describe('plan editing', () => {
   })
 
   it('adding twice is a no-op; condition is stored', () => {
-    const p = addPick(addPick(empty, KAYAK, { kind: 'min', min: 2 }), KAYAK)
+    const p = addPick(addPick(empty, KAYAK, { people: [], min: 2 }), KAYAK)
     expect(p.rankings[1]).toEqual([1])
-    expect(p.conditions[1]).toEqual({ kind: 'min', min: 2 })
+    expect(p.conditions[1]).toEqual({ people: [], min: 2 })
   })
 
   it('removes a pick from all days with its condition, and clears status of emptied days', () => {
-    let p = addPick(addPick(empty, THEATRE, { kind: 'min', min: 1 }), ARCHERY)
+    let p = addPick(addPick(empty, THEATRE, { people: [], min: 1 }), ARCHERY)
     p = setDayStatus(p, 2, 'registered', offerings)
     p = removePick(p, THEATRE)
     expect(p.rankings).toEqual({ 1: [4], 2: [] })
@@ -74,14 +74,14 @@ describe('normalizePlan', () => {
       {
         ...empty,
         rankings: { 1: [1, 4] },
-        conditions: { 1: { kind: 'people', people: [1, 2, 77] }, 4: { kind: 'min', min: 0 }, 2: { kind: 'min', min: 3 } },
+        conditions: { 1: { people: [1, 2, 77], min: 3 }, 4: { people: [], min: 0 }, 2: { people: [], min: 3 } },
         statuses: { 1: 'registered', 2: 'registered' },
       },
       offerings,
       me,
       new Set([1, 2]),
     )
-    expect(p.conditions).toEqual({ 1: { kind: 'people', people: [2] } })
+    expect(p.conditions).toEqual({ 1: { people: [2], min: 3 } })
     expect(p.statuses).toEqual({ 1: 'registered' })
   })
 

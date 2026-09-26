@@ -96,12 +96,12 @@ export function PersonSheet({ view, pid, onClose }: { view: View; pid: number; o
   )
 }
 
-/** "Pójdę, jeśli idzie też…": specific people; at least N of my gender is under "Więcej opcji". */
+/** "Pójdę, jeśli idzie też…": specific people and/or (under "Więcej opcji") at least N of my gender – both must hold. */
 export function ConditionSheet({ view, oid, day, edit, onClose }: { view: View; oid: number; day: number; edit: (change: (plan: Plan) => Plan) => void; onClose: () => void }) {
   const existing = view.myPlan.conditions[oid]
-  const [people, setPeople] = useState<number[]>(existing?.kind === 'people' ? existing.people : [])
-  const [more, setMore] = useState(existing?.kind === 'min')
-  const [min, setMin] = useState(existing?.kind === 'min' ? existing.min : 2)
+  const [people, setPeople] = useState<number[]>(existing?.people ?? [])
+  const [more, setMore] = useState(existing?.min != null)
+  const [min, setMin] = useState(existing?.min ?? 0) // 0 = no minimum
   const [query, setQuery] = useState('')
   const o = view.offering(oid)
   const me = view.me
@@ -113,6 +113,11 @@ export function ConditionSheet({ view, oid, day, edit, onClose }: { view: View; 
   const toggle = (id: number) => setPeople((ps) => (ps.includes(id) ? ps.filter((x) => x !== id) : [...ps, id]))
   const sameGenderGoing = view.goers(oid, day).filter((p) => p.id !== me.id && p.gender === me.gender).length
 
+  const summary = [
+    people.length ? 'jeśli idzie ' + people.map((q) => view.person(q)?.firstName ?? '?').join(' i ') : '',
+    min ? `${people.length ? 'i' : 'jeśli idzie'} min. ${min} ${own}` : '',
+  ].filter(Boolean).join(' ')
+
   function save(c: Condition | null) {
     edit((p) => setCondition(p, oid, c))
     onClose()
@@ -122,7 +127,7 @@ export function ConditionSheet({ view, oid, day, edit, onClose }: { view: View; 
     <Sheet onClose={onClose}>
       <div className="sec">
         <div className="b" style={{ fontSize: 18 }}>Pójdę na {view.activityOf(oid).name}, jeśli idzie też…</div>
-        <div className="small muted" style={{ marginTop: 3 }}>Zaznacz osoby. Dopóki nie idą, ten plan czeka, a liczy się następny.</div>
+        <div className="small muted" style={{ marginTop: 3 }}>Zaznacz osoby. Dopóki warunek nie jest spełniony, ten plan czeka, a liczy się następny.</div>
       </div>
       <div className="sec">
         <input className="input" placeholder="Szukaj osoby…" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -140,20 +145,20 @@ export function ConditionSheet({ view, oid, day, edit, onClose }: { view: View; 
         <button className="linkb" onClick={() => setMore(!more)}>Więcej opcji {more ? '▴' : '▾'}</button>
         {more && (
           <div className="card pad" style={{ margin: '8px 0 0' }}>
-            <div className="small muted">Zamiast konkretnych osób: pójdę, jeśli idzie co najmniej</div>
+            <div className="small muted">{people.length ? 'Oraz' : 'Pójdę, jeśli idzie'} co najmniej (0 = bez minimum):</div>
             <div className="stepper" style={{ marginTop: 6 }}>
-              <button onClick={() => setMin(Math.max(1, min - 1))}>−</button>
+              <button onClick={() => setMin(Math.max(0, min - 1))}>−</button>
               <span className="b" style={{ fontSize: 20 }}>{min}</span>
               <button onClick={() => setMin(min + 1)}>+</button>
               <span className="muted small">{own} oprócz Ciebie</span>
             </div>
             <div className="small muted" style={{ marginTop: 6 }}>Teraz idzie: {sameGenderGoing} {own}</div>
-            <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => save({ kind: 'min', min })}>Zapisz: min. {min} {own}</button>
           </div>
         )}
       </div>
       <div className="sec" style={{ display: 'grid', gap: 8 }}>
-        <button className="btn" disabled={!people.length} onClick={() => save({ kind: 'people', people })}>Zapisz</button>
+        {(people.length > 0 || min > 0) && <div className="small" style={{ color: 'var(--cond)' }}>🤝 Pójdziesz, {summary}</div>}
+        <button className="btn" disabled={!people.length && !min} onClick={() => save({ people, min: min || null })}>Zapisz</button>
         <button className="btn ghost" onClick={() => save(null)}>Idę niezależnie od innych</button>
       </div>
     </Sheet>

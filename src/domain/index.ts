@@ -20,9 +20,11 @@ export interface Participant {
   bracket: Bracket
 }
 
-export type Condition =
-  | { kind: 'people'; people: ParticipantId[] }
-  | { kind: 'min'; min: number } // at least N others of the participant's own gender
+/** Both parts must hold: every named person goes, and (if set) at least `min` others of the participant's own gender. */
+export interface Condition {
+  people: ParticipantId[]
+  min: number | null
+}
 
 /**
  * Who a participant signs up as; each group has its own capacity. U15/U18 are always mentees,
@@ -99,7 +101,8 @@ export function resolve(input: { participants: Participant[]; offerings: Offerin
   const dropped = new Map<ParticipantId, Set<OfferingId>>(plans.map((p) => [p.participantId, new Set()]))
 
   const holdsOnDay = (plan: Plan, c: Condition, oid: OfferingId, day: DayId, cur: Choices): boolean => {
-    if (c.kind === 'people') return c.people.every((q) => cur.get(q)?.get(day) === oid)
+    if (!c.people.every((q) => cur.get(q)?.get(day) === oid)) return false
+    if (c.min == null) return true
     const gender = participants.get(plan.participantId)!.gender
     let n = 0
     for (const [q, choices] of cur) {

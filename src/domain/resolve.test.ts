@@ -74,7 +74,7 @@ describe('resolve', () => {
       participants: [boy(1), boy(2)],
       offerings,
       plans: [
-        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'people', people: [2] } } }),
+        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [2], min: null } } }),
         plan(2, { rankings: { 1: [ARCHERY] } }),
       ],
     })
@@ -87,7 +87,7 @@ describe('resolve', () => {
       participants: [boy(1), boy(2), boy(3)],
       offerings,
       plans: [
-        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'people', people: [2, 3] } } }),
+        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [2, 3], min: null } } }),
         plan(2, { rankings: { 1: [CLIMB] } }),
         plan(3, { rankings: { 1: [ARCHERY, CLIMB] } }), // considers climbing but it isn't his current choice
       ],
@@ -95,9 +95,33 @@ describe('resolve', () => {
     expect(r.currentChoice(1, 1)).toBe(KAYAK)
   })
 
+  it('named people and "min N" together: both must hold', () => {
+    const cond = { [CLIMB]: { people: [2], min: 2 } }
+    const onlyTomek = resolve({
+      participants: [boy(1), boy(2), boy(3)],
+      offerings,
+      plans: [plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: cond }), plan(2, { rankings: { 1: [CLIMB] } }), plan(3, { rankings: { 1: [ARCHERY] } })],
+    })
+    expect(onlyTomek.currentChoice(1, 1)).toBe(KAYAK) // Tomek goes, but only 1 boy
+
+    const enoughButNoTomek = resolve({
+      participants: [boy(1), boy(2), boy(3), boy(4)],
+      offerings,
+      plans: [plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: cond }), plan(2, { rankings: { 1: [ARCHERY] } }), plan(3, { rankings: { 1: [CLIMB] } }), plan(4, { rankings: { 1: [CLIMB] } })],
+    })
+    expect(enoughButNoTomek.currentChoice(1, 1)).toBe(KAYAK) // 2 boys, but not Tomek
+
+    const both = resolve({
+      participants: [boy(1), boy(2), boy(3)],
+      offerings,
+      plans: [plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: cond }), plan(2, { rankings: { 1: [CLIMB] } }), plan(3, { rankings: { 1: [CLIMB] } })],
+    })
+    expect(both.currentChoice(1, 1)).toBe(CLIMB)
+  })
+
   it('"min N" counts only others of own gender, not the participant', () => {
     const plans = [
-      plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'min', min: 2 } } }),
+      plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [], min: 2 } } }),
       plan(2, { rankings: { 1: [CLIMB] } }),
       plan(3, { rankings: { 1: [CLIMB] } }), // girl – doesn't count for a boy
     ]
@@ -117,8 +141,8 @@ describe('resolve', () => {
       participants: [boy(1), boy(2)],
       offerings,
       plans: [
-        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'people', people: [2] } } }),
-        plan(2, { rankings: { 1: [CLIMB, ARCHERY] }, conditions: { [CLIMB]: { kind: 'people', people: [1] } } }),
+        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [2], min: null } } }),
+        plan(2, { rankings: { 1: [CLIMB, ARCHERY] }, conditions: { [CLIMB]: { people: [1], min: null } } }),
       ],
     })
     expect(r.currentChoice(1, 1)).toBe(CLIMB)
@@ -131,8 +155,8 @@ describe('resolve', () => {
       participants: [boy(1), boy(2), boy(3)],
       offerings,
       plans: [
-        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'people', people: [2] } } }),
-        plan(2, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'people', people: [3] } } }),
+        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [2], min: null } } }),
+        plan(2, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [3], min: null } } }),
         plan(3, { rankings: { 1: [CLIMB] } }),
       ],
     })
@@ -144,8 +168,8 @@ describe('resolve', () => {
       participants: [boy(1), boy(2), boy(3)],
       offerings,
       plans: [
-        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'people', people: [2] } } }),
-        plan(2, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'people', people: [3] } } }),
+        plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [2], min: null } } }),
+        plan(2, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [3], min: null } } }),
         plan(3, { rankings: { 1: [ARCHERY] } }),
       ],
     })
@@ -156,7 +180,7 @@ describe('resolve', () => {
     const r = resolve({
       participants: [boy(1)],
       offerings,
-      plans: [plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { kind: 'min', min: 5 } }, statuses: { 1: 'registered' } })],
+      plans: [plan(1, { rankings: { 1: [CLIMB, KAYAK] }, conditions: { [CLIMB]: { people: [], min: 5 } }, statuses: { 1: 'registered' } })],
     })
     expect(r.currentChoice(1, 1)).toBe(CLIMB)
   })
@@ -190,7 +214,7 @@ describe('resolve', () => {
         participants: [boy(1), boy(2)],
         offerings: ms,
         plans: [
-          plan(1, { rankings: { 1: [THEATRE, KAYAK], 2: [THEATRE, CLIMB] }, conditions: { [THEATRE]: { kind: 'people', people: [2] } } }),
+          plan(1, { rankings: { 1: [THEATRE, KAYAK], 2: [THEATRE, CLIMB] }, conditions: { [THEATRE]: { people: [2], min: null } } }),
           plan(2, { rankings: { 1: [THEATRE], 2: [CLIMB] } }),
         ],
       })
@@ -205,7 +229,7 @@ describe('resolve', () => {
         participants: [boy(1), boy(2)],
         offerings: ms,
         plans: [
-          plan(1, { rankings: { 1: [THEATRE, KAYAK], 2: [THEATRE, CLIMB] }, conditions: { [THEATRE]: { kind: 'min', min: 1 } } }),
+          plan(1, { rankings: { 1: [THEATRE, KAYAK], 2: [THEATRE, CLIMB] }, conditions: { [THEATRE]: { people: [], min: 1 } } }),
           plan(2, { rankings: { 1: [THEATRE], 2: [THEATRE] } }),
         ],
       })
@@ -219,7 +243,7 @@ describe('resolve', () => {
         participants: [boy(1), boy(2)],
         offerings: ms,
         plans: [
-          plan(1, { rankings: { 1: [THEATRE, KAYAK], 2: [CLIMB, THEATRE] }, conditions: { [CLIMB]: { kind: 'people', people: [2] } } }),
+          plan(1, { rankings: { 1: [THEATRE, KAYAK], 2: [CLIMB, THEATRE] }, conditions: { [CLIMB]: { people: [2], min: null } } }),
           plan(2, { rankings: { 2: [CLIMB] } }),
         ],
       })
@@ -235,8 +259,8 @@ describe('resolve', () => {
       participants: [boy(1), boy(2)],
       offerings,
       plans: [
-        plan(1, { rankings: { 1: [X, Y] }, conditions: { [X]: { kind: 'people', people: [2] } } }),
-        plan(2, { rankings: { 1: [Y, X] }, conditions: { [Y]: { kind: 'people', people: [1] } } }),
+        plan(1, { rankings: { 1: [X, Y] }, conditions: { [X]: { people: [2], min: null } } }),
+        plan(2, { rankings: { 1: [Y, X] }, conditions: { [Y]: { people: [1], min: null } } }),
       ],
     })
     expect(r.currentChoice(1, 1)).toBe(Y)
